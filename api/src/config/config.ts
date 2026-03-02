@@ -9,8 +9,11 @@ const envSchema = z.object({
 
   MONGODB_URI: z.string().url(),
 
-  JWT_SECRET: z.string().min(32),
-  JWT_EXPIRES_IN: z.string().default("7d"),
+  ACCESS_TOKEN_SECRET: z.string().min(32),
+  ACCESS_TOKEN_EXPIRY: z.string().default("7d"),
+
+  REFRESH_TOKEN_SECRET: z.string().min(32),
+  REFRESH_TOKEN_EXPIRY: z.string().default("30d"),
 
   REDIS_URL: z.string().url().default("redis://localhost:6379"),
 
