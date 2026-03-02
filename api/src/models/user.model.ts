@@ -24,11 +24,21 @@ export interface IUser extends Document {
   role: string;
   lastActive: Date;
   isBanned: boolean;
+  emailVerificationToken?: string;
+  emailVerificationExpire?: Date;
+  hintsPurchased?: {
+    challenge: mongoose.Types.ObjectId;
+    hintIndex: number;
+    purchasedAt: Date;
+  }[];
+  country?: string;
+  isDeleted: boolean;
 
   generateAccessToken(): string;
   generateRefreshToken(): string;
   comparePassword(password: string): Promise<boolean>;
   getResetPasswordToken(): string;
+  generateEmailVerificationToken(): string;
   updateLastActive(): Promise<IUser>;
 }
 
@@ -37,6 +47,7 @@ const userSchema = new mongoose.Schema<IUser>(
     username: {
       type: String,
       required: [true, "Username is required"],
+      unique: true,
       trim: true,
       minLength: [3, "Username must be at least 3 characters long"],
       maxLength: [30, "Username must be less than 30 characters"],
@@ -59,9 +70,12 @@ const userSchema = new mongoose.Schema<IUser>(
     },
     password: {
       type: String,
-      required: function (this: IUser): boolean {
-        return this.provider === "local";
-      },
+      required: [
+        function (this: IUser): boolean {
+          return this.provider === "local";
+        },
+        "Password is required for local accounts",
+      ],
       select: false,
     },
     mobileNumber: {
@@ -110,19 +124,53 @@ const userSchema = new mongoose.Schema<IUser>(
       type: Number,
       default: 0,
     },
+    hintsPurchased: [
+      {
+        challengeId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Challenge",
+          required: true,
+        },
+        hintIndex: {
+          type: Number,
+          required: true,
+        },
+        purchasedAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
     isVerified: {
       type: Boolean,
-      default: false,
+      default: function (this: IUser) {
+        return this.provider !== "local";
+      },
     },
     /**
      * Token used for password reset
      */
-    resetPasswordToken: String,
+    resetPasswordToken: {
+      type: String,
+      select: false,
+    },
 
     /**
      * Expiration time for reset token
      */
-    resetPasswordExpire: Date,
+    resetPasswordExpire: {
+      type: Date,
+      select: false,
+    },
+
+    emailVerificationToken: {
+      type: String,
+      select: false,
+    },
+    emailVerificationExpire: {
+      type: Date,
+      select: false,
+    },
 
     /**
      * Refresh token for session management
@@ -140,14 +188,53 @@ const userSchema = new mongoose.Schema<IUser>(
       type: Boolean,
       default: false,
     },
+    country: {
+      type: String,
+      maxlength: 2, // ISO 3166-1 alpha-2 e.g. "IN", "US"
+      default: null,
+    },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true, toJSON: { virtuals: true }, toObject: { virtuals: true } }
 );
 
 userSchema.index({ email: 1 });
 userSchema.index({ username: 1 });
-userSchema.index({ provider: 1, providerId: 1 });
+userSchema.index(
+  { provider: 1, providerId: 1 },
+  { unique: true, sparse: true }
+);
 userSchema.index({ score: -1 });
+userSchema.index(
+  { _id: 1, solvedChallenges: 1 },
+  { unique: true, sparse: true }
+);
+userSchema.index({
+  "hintsPurchased.challengeId": 1,
+});
+userSchema.index({ score: -1 });
+userSchema.index({ country: 1, score: -1 });
+
+// Virtual for gravatar URL
+userSchema.virtual("gravatar").get(function (this: IUser) {
+  const hash = crypto.createHash("md5").update(this.email).digest("hex");
+  return `https://www.gravatar.com/avatar/${hash}?d=identicon`;
+});
+
+// Validate password length for local providerq
+userSchema.pre("validate", function (this: IUser) {
+  if (
+    this.isNew &&
+    this.provider === "local" &&
+    this.password &&
+    this.password.length < 8
+  ) {
+    this.invalidate("password", "Password must be at least 8 characters");
+  }
+});
 
 // Hash password before saving the user
 userSchema.pre("save", async function (this: IUser) {
@@ -159,7 +246,7 @@ userSchema.pre("save", async function (this: IUser) {
     return;
   }
 
-  const salt = await bcrypt.genSalt(10);
+  const salt = await bcrypt.genSalt(config.BCRYPT_ROUNDS);
   this.password = await bcrypt.hash(this.password, salt);
 
   return;
@@ -214,9 +301,34 @@ userSchema.methods.getResetPasswordToken = function (): string {
     .createHash("sha256")
     .update(resetToken)
     .digest("hex");
-  this.resetPasswordExpire = Date.now() + 10 * 60 * 1000; // 10 minutes
+  this.resetPasswordExpire = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
   return resetToken;
 };
+
+/**
+ * Generates an email verification token for the user.
+ * @returns {string} Email verification token
+ * @remarks This method generates a random token and updates the user document with the hashed token and expiration time.
+ * The expiration time is set to 24 hours by default.
+ */
+userSchema.methods.generateEmailVerificationToken = function (): string {
+  const token = crypto.randomBytes(32).toString("hex");
+  this.emailVerificationToken = crypto
+    .createHash("sha256")
+    .update(token)
+    .digest("hex");
+  this.emailVerificationExpire = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+  return token;
+};
+
+// Remove user from team members when user is deleted
+userSchema.post("findOneAndDelete", async function (doc: IUser) {
+  if (doc?.teamId) {
+    await mongoose
+      .model("Team")
+      .updateOne({ _id: doc.teamId }, { $pull: { members: doc._id } });
+  }
+});
 
 /**
  * Updates the user's last active time.
