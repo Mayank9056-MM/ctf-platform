@@ -181,4 +181,4 @@ teamSchema.methods.generateJoinCode = function (): string {
   return this.joinCode;
 };
 
-export default mongoose.model("Team", teamSchema);
+export default mongoose.model<ITeam>("Team", teamSchema);
