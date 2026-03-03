@@ -22,6 +22,11 @@ const envSchema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
 
+  //cloudinary
+  CLOUDINARY_CLOUD_NAME: z.string(),
+  CLOUDINARY_API_KEY: z.string(),
+  CLOUDINARY_API_SECRET: z.string(),
+
   MAX_FILE_SIZE: z.coerce.number().default(10485760),
   UPLOAD_PATH: z.string().default("./uploads"),
   BCRYPT_ROUNDS: z.coerce.number().default(12),
