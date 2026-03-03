@@ -415,6 +415,9 @@ notificationSchema.statics.getActiveBroadcasts = async function (
     .lean();
 };
 
-const Notification = mongoose.model("Notification", notificationSchema);
+const Notification = mongoose.model<INotification, INotificationModel>(
+  "Notification",
+  notificationSchema
+);
 
 export default Notification;
