@@ -1,4 +1,4 @@
-import mongoose, { Types, Document, mongo } from "mongoose";
+import mongoose, { Types, Document } from "mongoose";
 
 // enums
 
