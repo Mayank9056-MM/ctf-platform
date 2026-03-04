@@ -1,6 +1,5 @@
-import User from "../../models/user.model";
+import User, { IUser } from "../../models/user.model";
 import { ApiError } from "../../utils/ApiError";
-import { asyncHandler } from "../../utils/asyncHandler";
 import { uploadOnCloudinary } from "../../utils/cloudinary";
 import logger from "../../utils/logger";
 import { LoginInput, RegisterInput } from "./auth.types";
@@ -53,7 +52,7 @@ class AuthService {
    * @returns {Promise<User>} - A promise that resolves to the newly registered user.
    * @throws {ApiError} - If the user already exists, or if there is an error while registering the user.
    */
-  async registerUser(data: RegisterInput) {
+  async registerUser(data: RegisterInput): Promise<IUser> {
     const existedUser = await User.findOne({ email: data.email });
 
     if (existedUser) {
@@ -103,7 +102,11 @@ class AuthService {
    * @returns {Promise<{accessToken: string, refreshToken: string, user: IUser}>} - Object containing access token, refresh token and user object
    * @throws {ApiError} - If user is not found or invalid credentials are provided
    */
-  async loginUser(data: LoginInput) {
+  async loginUser(data: LoginInput): Promise<{
+    accessToken: string;
+    refreshToken: string;
+    user: Omit<IUser, "password">;
+  }> {
     const user = await User.findOne({ email: data.email }).select("+password");
 
     if (!user) {
