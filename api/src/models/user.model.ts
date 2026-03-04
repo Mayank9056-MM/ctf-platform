@@ -27,7 +27,7 @@ export interface IUser extends Document {
   emailVerificationToken?: string;
   emailVerificationExpire?: Date;
   hintsPurchased?: {
-    challenge: mongoose.Types.ObjectId;
+    challengeId: mongoose.Types.ObjectId;
     hintIndex: number;
     purchasedAt: Date;
   }[];
@@ -41,6 +41,19 @@ export interface IUser extends Document {
   generateEmailVerificationToken(): string;
   updateLastActive(): Promise<IUser>;
 }
+
+// helper functions
+
+const generateUsername = (email: string): string => {
+  const base = email
+    .split("@")[0]
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+  const random = Math.floor(1000 + Math.random() * 9000);
+  return `${base}_${random}`;
+};
+
+// main schema
 
 const userSchema = new mongoose.Schema<IUser>(
   {
@@ -215,7 +228,7 @@ userSchema.index(
 userSchema.index({
   "hintsPurchased.challengeId": 1,
 });
-userSchema.index({ score: -1 });
+
 userSchema.index({ country: 1, score: -1 });
 
 // Virtual for gravatar URL
@@ -233,6 +246,21 @@ userSchema.pre("validate", function (this: IUser) {
     this.password.length < 8
   ) {
     this.invalidate("password", "Password must be at least 8 characters");
+  }
+});
+
+userSchema.pre("validate", async function (this: IUser) {
+  if (!this.username) {
+    let username = generateUsername(this.email);
+
+    let exists = await mongoose.models.User.findOne({ username });
+
+    while (exists) {
+      username = generateUsername(this.email);
+      exists = await mongoose.models.User.findOne({ username });
+    }
+
+    this.username = username;
   }
 });
 
