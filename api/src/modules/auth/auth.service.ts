@@ -131,8 +131,6 @@ class AuthService {
 
   // OAuth Login (Google/Github)
   async oauthLogin() {}
-
-  async logoutUser() {}
 }
 
 export const authService = new AuthService();
