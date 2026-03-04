@@ -221,10 +221,7 @@ userSchema.index(
   { unique: true, sparse: true }
 );
 userSchema.index({ score: -1 });
-userSchema.index(
-  { _id: 1, solvedChallenges: 1 },
-  { unique: true, sparse: true }
-);
+
 userSchema.index({
   "hintsPurchased.challengeId": 1,
 });
