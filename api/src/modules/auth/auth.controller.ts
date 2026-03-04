@@ -1,10 +1,10 @@
-import { ref } from "node:process";
 import { ApiError } from "../../utils/ApiError";
 import { ApiResponse } from "../../utils/ApiResponse";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { authService } from "./auth.service";
 import { loginSchema, registerSchema } from "./auth.validator";
 import { CookieOptions } from "express";
+import User from "../../models/user.model";
 
 const register = asyncHandler(async (req, res) => {
   const parsed = registerSchema.safeParse(req.body);
@@ -55,10 +55,33 @@ const login = asyncHandler(async (req, res) => {
   };
 
   return res
-    .status(201)
+    .status(200)
     .cookie("accessToken", accessToken, options)
     .cookie("refreshToken", refreshToken, options)
-    .json(new ApiResponse(201, user, "User login successfully"));
+    .json(new ApiResponse(200, user, "User login successfully"));
 });
 
-export { register, login };
+const logout = asyncHandler(async (req, res) => {
+  if (!req.user?._id) {
+    throw new ApiError(401, "Unauthorized");
+  }
+
+  await User.findByIdAndUpdate(req.user._id, {
+    $unset: {
+      refreshToken: 1,
+    },
+  });
+
+  const options = {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+  };
+
+  return res
+    .status(200)
+    .clearCookie("accessToken", options)
+    .clearCookie("refreshToken", options)
+    .json(new ApiResponse(200, {}, "User logged out successfully"));
+});
+
+export { register, login, logout };
