@@ -13,3 +13,8 @@ export type OAuthProfile = {
   email: string;
   avatar: string;
 };
+
+export type LoginInput = {
+  email: string;
+  password: string;
+};

@@ -3,7 +3,7 @@ import { ApiError } from "../../utils/ApiError";
 import { ApiResponse } from "../../utils/ApiResponse";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { authService } from "./auth.service";
-import { registerSchema } from "./auth.validator";
+import { loginSchema, registerSchema } from "./auth.validator";
 import { CookieOptions } from "express";
 
 const register = asyncHandler(async (req, res) => {
@@ -24,9 +24,28 @@ const register = asyncHandler(async (req, res) => {
     throw new ApiError(400, "avatar is required");
   }
 
-  const { accessToken, refreshToken, user } = await authService.registerUser({
+  const user = await authService.registerUser({
     ...parsed.data,
     avatarPath,
+  });
+
+  return res
+    .status(201)
+    .json(new ApiResponse(201, user, "User registered successfully"));
+});
+
+const login = asyncHandler(async (req, res) => {
+  const parsed = loginSchema.safeParse(req.body);
+
+  if (!parsed.success) {
+    throw new ApiError(
+      400,
+      parsed.error?.message || "Something went wrong while login user"
+    );
+  }
+
+  const { accessToken, refreshToken, user } = await authService.loginUser({
+    ...parsed.data,
   });
 
   const options: CookieOptions = {
@@ -39,7 +58,7 @@ const register = asyncHandler(async (req, res) => {
     .status(201)
     .cookie("accessToken", accessToken, options)
     .cookie("refreshToken", refreshToken, options)
-    .json(new ApiResponse(201, user, "User registered successfully"));
+    .json(new ApiResponse(201, user, "User login successfully"));
 });
 
-export { register };
+export { register, login };

@@ -24,3 +24,8 @@ export const OAuthProfileSchema = z.object({
   email: z.string().email({ message: "Invalid email address" }),
   avatar: z.string().url({ message: "Avatar must be a valid URL" }),
 });
+
+export const loginSchema = z.object({
+  email: z.string().email({ message: "Invalid email address" }),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+});

@@ -3,7 +3,7 @@ import { ApiError } from "../../utils/ApiError";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { uploadOnCloudinary } from "../../utils/cloudinary";
 import logger from "../../utils/logger";
-import { RegisterInput } from "./auth.types";
+import { LoginInput, RegisterInput } from "./auth.types";
 
 type tokenPair = {
   accessToken: string;
@@ -46,6 +46,13 @@ class AuthService {
   }
 
   // main methods
+
+  /**
+   * Registers a new user based on the provided data.
+   * @param {RegisterInput} data - The data to register the user with.
+   * @returns {Promise<User>} - A promise that resolves to the newly registered user.
+   * @throws {ApiError} - If the user already exists, or if there is an error while registering the user.
+   */
   async registerUser(data: RegisterInput) {
     const existedUser = await User.findOne({ email: data.email });
 
@@ -87,17 +94,37 @@ class AuthService {
       throw new ApiError(400, "something went wrong while registering user");
     }
 
+    return user;
+  }
+
+  /**
+   * Login user
+   * @param {LoginInput} data - Email and password of the user
+   * @returns {Promise<{accessToken: string, refreshToken: string, user: IUser}>} - Object containing access token, refresh token and user object
+   * @throws {ApiError} - If user is not found or invalid credentials are provided
+   */
+  async loginUser(data: LoginInput) {
+    const user = await User.findOne({ email: data.email }).select("+password");
+
+    if (!user) {
+      throw new ApiError(400, "user not found please register");
+    }
+
+    const isPasswordMatch = await user.comparePassword(data.password);
+
+    if (!isPasswordMatch) {
+      throw new ApiError(400, "invalid credentials");
+    }
+
     const { accessToken, refreshToken } =
       await this.generateAccessAndRefreshToken(user._id.toString());
 
-    return {
-      user,
-      accessToken,
-      refreshToken,
-    };
-  }
+    // remove password
+    const userObj = user.toObject();
+    delete userObj.password;
 
-  async loginUser() {}
+    return { accessToken, refreshToken, user: userObj };
+  }
 
   // OAuth Login (Google/Github)
   async oauthLogin() {}
