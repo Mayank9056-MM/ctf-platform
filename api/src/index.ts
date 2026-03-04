@@ -4,7 +4,7 @@ import logger from "./utils/logger";
 import morgan from "morgan";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
-import mongoSanitize from "express-mongo-sanitize";
+// import mongoSanitize from "express-mongo-sanitize";
 import hpp from "hpp";
 
 const app = express();
@@ -25,7 +25,7 @@ const limiter = rateLimit({
 // security middleware
 app.use(helmet());
 app.use("/api", limiter);
-app.use(mongoSanitize());
+// app.use(mongoSanitize({}));
 app.use(hpp());
 
 // CORS configuration
@@ -96,8 +96,10 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
 });
 
 // import routes
+import authRouter from "./modules/auth/auth.routes";
 
 // routes
+app.use("/api/v1/auth", authRouter);
 
 // It should be always at bottom
 // 404 handler
