@@ -1,15 +1,25 @@
+import { Types } from "mongoose";
 import { config } from "../../config/config";
 import { TokenPayload } from "../../middlewares/verifyAuth.middleware";
 import User, { IUser } from "../../models/user.model";
 import { ApiError } from "../../utils/ApiError";
-import { uploadOnCloudinary } from "../../utils/cloudinary";
+import {
+  deleteFromCloudinary,
+  uploadOnCloudinary,
+} from "../../utils/cloudinary";
 import logger from "../../utils/logger";
 import {
   changeCurrentPasswordInput,
+  forgotPasswordInput,
   LoginInput,
   RegisterInput,
+  resetPasswordInput,
+  updateAccountDetailsInput,
+  updateUserAvatarInput,
 } from "./auth.types";
 import jwt from "jsonwebtoken";
+import { EmailService } from "../../services/emailService";
+import crypto from "crypto";
 
 type tokenPair = {
   accessToken: string;
@@ -63,10 +73,11 @@ class AuthService {
     const existedUser = await User.findOne({ email: data.email });
 
     if (existedUser) {
-      throw new ApiError(400, "user already exists please login");
+      throw new ApiError(409, "user already exists please login");
     }
 
-    let avatarUrl: string | undefined;
+    let avatarUrl: string | null;
+    let avatarPublicId: string;
 
     if (data.avatarPath) {
       try {
@@ -74,12 +85,13 @@ class AuthService {
 
         if (!upload?.secure_url) {
           throw new ApiError(
-            400,
+            500,
             "something went wrong while uploading avatar"
           );
         }
 
         avatarUrl = upload.secure_url;
+        avatarPublicId = upload.public_id;
       } catch (error) {
         logger.error("something went wrong while uploading avatar", error);
         throw new ApiError(400, "something went wrong while uploading avatar");
@@ -93,7 +105,10 @@ class AuthService {
       password: data.password,
       fullName: data.fullName,
       provider: data.provider,
-      avatar: avatarUrl,
+      avatar: {
+        url: avatarUrl,
+        publicId: avatarPublicId,
+      },
     });
 
     if (!user) {
@@ -161,11 +176,91 @@ class AuthService {
     return { accessToken, refreshToken };
   }
 
-  async getCurrentUser() {}
+  async updateAccountDetails(
+    data: updateAccountDetailsInput,
+    userId: Types.ObjectId
+  ) {
+    // remove undefined fields
+    const updateData = Object.fromEntries(
+      Object.entries(data).filter(([_, v]) => v !== undefined)
+    );
 
-  async updateAccountDetails() {}
+    if (Object.keys(updateData).length === 0) {
+      throw new ApiError(400, "No fields provided for update");
+    }
 
-  async updateUserAvatar() {}
+    // check email if exitsts or not
+    if (updateData.email) {
+      const existingUser = await User.findOne({
+        email: updateData.email,
+        _id: { $ne: userId },
+      });
+
+      if (existingUser) {
+        throw new ApiError(409, "Email already in use");
+      }
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      {
+        $set: updateData,
+      },
+      {
+        new: true,
+        runValidators: true,
+      }
+    );
+
+    if (!updatedUser) {
+      throw new ApiError(404, "Somthing went wrong while updating user");
+    }
+
+    return updatedUser;
+  }
+
+  async updateUserAvatar(data: updateUserAvatarInput, user: IUser) {
+    let avatarUrl;
+    let avatarPublicId;
+
+    try {
+      const res = await uploadOnCloudinary(data.avatarPath);
+
+      if (!res?.secure_url) {
+        throw new ApiError(500, "Something went wrong while uplading avatar");
+      }
+
+      avatarUrl = res.secure_url;
+      avatarPublicId = res.public_id;
+    } catch (error) {
+      console.log(error);
+      throw new ApiError(500, "Something went wrong while uploading avatar");
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+      user._id,
+      {
+        avatar: {
+          url: avatarUrl,
+          publicId: avatarPublicId,
+        },
+      },
+      {
+        new: true,
+      }
+    );
+
+    if (!updatedUser) {
+      throw new ApiError(500, "Somthing went wrong while updating user avatar");
+    }
+
+    // delete old avatar if exists
+    if (user.avatar?.publicId) {
+      await deleteFromCloudinary(user.avatar.publicId);
+    }
+
+    return updatedUser;
+  }
 
   async changePassword(data: changeCurrentPasswordInput) {
     const user = await User.findById(data.userId).select("+password");
@@ -191,9 +286,50 @@ class AuthService {
     return;
   }
 
-  async forgotPassword() {}
+  async forgotPassword(data: forgotPasswordInput) {
+    const user = await User.findOne({ email: data.email });
 
-  async resetPassword() {}
+    if (!user) {
+      return;
+    }
+
+    const resetToken = user.getResetPasswordToken();
+    await user.save({ validateBeforeSave: false });
+
+    try {
+      await EmailService.sendPasswordResetEmail(user.email, resetToken);
+    } catch (error) {
+      user.resetPasswordToken = undefined;
+      user.resetPasswordExpire = undefined;
+
+      await user.save({ validateBeforeSave: false });
+
+      throw new ApiError(500, "Failed to send password reset email");
+    }
+
+    return;
+  }
+
+  async resetPassword(data: resetPasswordInput) {
+    const user = await User.findOne({
+      resetPasswordToken: crypto
+        .createHash("sha256")
+        .update(data.token)
+        .digest("hex"),
+      resetPasswordExpire: { $gt: Date.now() },
+    });
+
+    if (!user) {
+      throw new ApiError(400, "Invalid or expired reset token");
+    }
+
+    user.password = data.newPassword;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpire = undefined;
+    await user.save();
+
+    return;
+  }
 }
 
 export const authService = new AuthService();
