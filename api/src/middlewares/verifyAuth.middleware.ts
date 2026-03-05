@@ -5,7 +5,7 @@ import User from "../models/user.model";
 import { ApiError } from "../utils/ApiError";
 import logger from "../utils/logger";
 
-interface TokenPayload extends JwtPayload {
+export interface TokenPayload extends JwtPayload {
   _id: string;
 }
 

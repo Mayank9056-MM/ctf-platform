@@ -4,6 +4,7 @@ import { app } from "./index";
 import connectDB, { getDBStatus } from "./db/index";
 import { connectRedis } from "./config/redis";
 import logger from "./utils/logger";
+import { EmailService } from "./services/emailService";
 
 const PORT = config.PORT;
 
@@ -37,7 +38,7 @@ const server = app.listen(PORT, async () => {
     // await connectRedis();
 
     // Initialize email service
-    // EmailService.initialize();
+    EmailService.initialize();
 
     const server = app.listen(PORT, () => {
       logger.info(
