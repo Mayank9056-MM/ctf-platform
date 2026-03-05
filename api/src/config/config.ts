@@ -7,6 +7,8 @@ const envSchema = z.object({
   PORT: z.coerce.number().default(3001),
   CORS_ORIGIN: z.string().url().default("http://localhost:5173"),
 
+  FRONTEND_URL: z.string().url().default("http://localhost:5173"),
+
   MONGODB_URI: z.string().url(),
 
   ACCESS_TOKEN_SECRET: z.string().min(32),
