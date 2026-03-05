@@ -27,3 +27,25 @@ export type changeCurrentPasswordInput = {
   confirmPassword: string;
   userId: Types.ObjectId;
 };
+
+export type updateAccountDetailsInput = {
+  fullName?: string;
+  email?: string;
+  mobileNumber?: string;
+  bio?: string;
+  country?: string;
+};
+
+export type updateUserAvatarInput = {
+  avatarPath: string;
+};
+
+export type forgotPasswordInput = {
+  email: string;
+};
+
+export type resetPasswordInput = {
+  token: string;
+  newPassword: string;
+  confirmPassword: string;
+};
