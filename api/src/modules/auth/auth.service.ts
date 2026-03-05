@@ -1,8 +1,15 @@
+import { config } from "../../config/config";
+import { TokenPayload } from "../../middlewares/verifyAuth.middleware";
 import User, { IUser } from "../../models/user.model";
 import { ApiError } from "../../utils/ApiError";
 import { uploadOnCloudinary } from "../../utils/cloudinary";
 import logger from "../../utils/logger";
-import { LoginInput, RegisterInput } from "./auth.types";
+import {
+  changeCurrentPasswordInput,
+  LoginInput,
+  RegisterInput,
+} from "./auth.types";
+import jwt from "jsonwebtoken";
 
 type tokenPair = {
   accessToken: string;
@@ -131,6 +138,62 @@ class AuthService {
 
   // OAuth Login (Google/Github)
   async oauthLogin() {}
+
+  async refreshAccessToken(incomingRefreshToken: string) {
+    const decodedToken = jwt.verify(
+      incomingRefreshToken,
+      config.REFRESH_TOKEN_SECRET
+    ) as TokenPayload;
+
+    const user = await User.findById(decodedToken?._id);
+
+    if (!user) {
+      throw new ApiError(403, "Invalid refresh token");
+    }
+
+    if (incomingRefreshToken !== user?.refreshToken) {
+      throw new ApiError(403, "Invalid refresh token");
+    }
+
+    const { accessToken, refreshToken } =
+      await this.generateAccessAndRefreshToken(user._id.toString());
+
+    return { accessToken, refreshToken };
+  }
+
+  async getCurrentUser() {}
+
+  async updateAccountDetails() {}
+
+  async updateUserAvatar() {}
+
+  async changePassword(data: changeCurrentPasswordInput) {
+    const user = await User.findById(data.userId).select("+password");
+
+    if (!user) {
+      throw new ApiError(400, "user not found");
+    }
+
+    const isPasswordValid = await user.comparePassword(data.oldPassword);
+
+    if (!isPasswordValid) {
+      throw new ApiError(401, "Invalid old password");
+    }
+
+    if (data.newPassword !== data.confirmPassword) {
+      throw new ApiError(406, "confirm password not match");
+    }
+
+    user.password = data.newPassword; // auto encrypt before save
+
+    await user.save({ validateBeforeSave: false });
+
+    return;
+  }
+
+  async forgotPassword() {}
+
+  async resetPassword() {}
 }
 
 export const authService = new AuthService();

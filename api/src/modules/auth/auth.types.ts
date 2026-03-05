@@ -1,3 +1,5 @@
+import { Types } from "mongoose";
+
 export type RegisterInput = {
   email: string;
   password: string;
@@ -17,4 +19,11 @@ export type OAuthProfile = {
 export type LoginInput = {
   email: string;
   password: string;
+};
+
+export type changeCurrentPasswordInput = {
+  oldPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+  userId: Types.ObjectId;
 };
