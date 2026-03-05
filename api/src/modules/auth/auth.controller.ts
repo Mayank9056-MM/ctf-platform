@@ -4,8 +4,11 @@ import { asyncHandler } from "../../utils/asyncHandler";
 import { authService } from "./auth.service";
 import {
   changeCurrentPasswordSchema,
+  forgotPasswordSchema,
   loginSchema,
   registerSchema,
+  resetPasswordSchema,
+  updateAccountDetailsSchema,
 } from "./auth.validator";
 import { CookieOptions } from "express";
 import User from "../../models/user.model";
@@ -133,16 +136,131 @@ const changeCurrentPassword = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, {}, "Password changed successfully"));
 });
 
-const currentUser = asyncHandler(async (req, res) => {});
+const currentUser = asyncHandler(async (req, res) => {
+  if (!req.user) {
+    throw new ApiError(401, "Unauthorized");
+  }
 
-const updateAccountDetails = asyncHandler(async (req, res) => {});
+  return res
+    .status(200)
+    .json(new ApiResponse(200, req.user, "User details fetched successfully"));
+});
 
-const updateUserAvatar = asyncHandler(async (req, res) => {});
+const updateAccountDetails = asyncHandler(async (req, res) => {
+  const parsed = updateAccountDetailsSchema.safeParse(req.body);
 
-const changeUserPassword = asyncHandler(async (req, res) => {});
+  if (!parsed.success) {
+    throw new ApiError(
+      400,
+      parsed.error?.message || "Something went wrong while updating details"
+    );
+  }
 
-const forgotPassword = asyncHandler(async (req, res) => {});
+  if (!req.user) {
+    throw new ApiError(401, "Unauthorized");
+  }
 
-const resetPassword = asyncHandler(async (req, res) => {});
+  const updatedUser = await authService.updateAccountDetails(
+    parsed.data,
+    req.user._id
+  );
 
-export { register, login, logout, refreshAccessToken, changeCurrentPassword };
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        { user: updatedUser },
+        "User details updated succesfully"
+      )
+    );
+});
+
+const updateUserAvatar = asyncHandler(async (req, res) => {
+  if (!req.user) {
+    throw new ApiError(401, "Unauthorized");
+  }
+
+  const avatarPath = req.file?.path;
+
+  if (!avatarPath) {
+    throw new ApiError(400, "Avatar is required");
+  }
+
+  const updatedUser = await authService.updateUserAvatar(
+    { avatarPath },
+    req.user
+  );
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        { user: updatedUser },
+        "User avatar updated successfully"
+      )
+    );
+});
+
+const forgotPassword = asyncHandler(async (req, res) => {
+  const parsed = forgotPasswordSchema.safeParse(req.body);
+
+  if (!parsed.success) {
+    throw new ApiError(
+      400,
+      parsed.error?.message || "Something went wrong while resetting password"
+    );
+  }
+
+  await authService.forgotPassword(parsed.data);
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        {},
+        "If the email exists, a password reset link has been sent"
+      )
+    );
+});
+
+const resetPassword = asyncHandler(async (req, res) => {
+  const token = req.params.token as string;
+
+  if (!token) {
+    throw new ApiError(400, "Token is required");
+  }
+
+  const parsed = resetPasswordSchema.safeParse(req.body);
+
+  if (!parsed.success) {
+    throw new ApiError(
+      400,
+      parsed.error?.message || "Something went wrong while resetting password"
+    );
+  }
+
+  await authService.resetPassword({
+    ...parsed.data,
+    token,
+  });
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, {}, "Password reset successfully"));
+});
+
+export {
+  register,
+  login,
+  logout,
+  refreshAccessToken,
+  changeCurrentPassword,
+  currentUser,
+  updateAccountDetails,
+  updateUserAvatar,
+  forgotPassword,
+  resetPassword,
+};
