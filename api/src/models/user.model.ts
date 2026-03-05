@@ -11,7 +11,10 @@ export interface IUser extends Document {
   mobileNumber?: string;
   provider: "local" | "google" | "github";
   providerId?: string;
-  avatar?: string;
+  avatar?: {
+    url: string;
+    publicId: string;
+  };
   bio?: string;
   teamId?: mongoose.Types.ObjectId;
   solvedChallenges: mongoose.Types.ObjectId[];
@@ -52,6 +55,20 @@ const generateUsername = (email: string): string => {
   const random = Math.floor(1000 + Math.random() * 9000);
   return `${base}_${random}`;
 };
+
+// avatar schema
+const avatarSchema = new mongoose.Schema(
+  {
+    url: {
+      type: String,
+      default: "/images/default-avatar.png",
+    },
+    publicId: {
+      type: String,
+    },
+  },
+  { _id: false }
+);
 
 // main schema
 
@@ -109,10 +126,7 @@ const userSchema = new mongoose.Schema<IUser>(
       type: String,
       default: null,
     },
-    avatar: {
-      type: String,
-      default: "/images/default-avatar.png",
-    },
+    avatar: avatarSchema,
     bio: {
       type: String,
       maxLength: [200, "Bio cannot exceed 200 characters"],
