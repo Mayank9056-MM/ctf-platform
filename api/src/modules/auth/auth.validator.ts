@@ -58,10 +58,10 @@ export const updateAccountDetailsSchema = z.object({
   bio: z
     .string()
     .max(5000, "Bio should be less than 5000 characters")
-    .min(100, "Bio should be more than 100 characters")
+    .min(50, "Bio should be more than 50 characters")
     .optional(),
 
-  country: z.string().max(2, "Country code plz").optional(),
+  country: z.string().max(2, "Please enter a valid country").optional(),
 });
 
 export const forgotPasswordSchema = z.object({
@@ -79,7 +79,7 @@ export const resetPasswordSchema = z
       .string()
       .min(8, "Password must be at least 8 characters"),
   })
-  .refine((data) => data.newPassword !== data.confirmPassword, {
+  .refine((data) => data.newPassword === data.confirmPassword, {
     message: "Passwords do not match",
     path: ["confirmPassword"],
   });
