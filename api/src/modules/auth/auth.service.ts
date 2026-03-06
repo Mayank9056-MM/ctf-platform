@@ -31,6 +31,23 @@ class AuthService {
   // helper methods
 
   /**
+   * Issues a new access token and refresh token for a user and saves it to the database.
+   * @param {IUser} user - The user to issue the tokens for.
+   * @returns {Promise<{user: IUser, accessToken: string, refreshToken: string}>} - A promise that resolves to an object containing the user, access token and refresh token.
+   * @throws {ApiError} - If there is an error generating the tokens or saving the user.
+   */
+  private async issueTokens(user: IUser) {
+    const { accessToken, refreshToken } =
+      await this.generateAccessAndRefreshToken(user._id.toString());
+
+    user.refreshToken = refreshToken;
+
+    await user.save({ validateBeforeSave: false });
+
+    return { user, accessToken, refreshToken };
+  }
+
+  /**
    * Generates an access token and refresh token for a user based on their id.
    * @param {string} userId - The id of the user.
    * @returns {Promise<{accessToken: string, refreshToken: string}>} - A promise that resolves to an object containing the access token and refresh token.
@@ -63,47 +80,66 @@ class AuthService {
   // main methods
 
   /**
-   * Registers a new user based on the provided data.
-   * @param {RegisterInput} data - The data to register the user with.
-   * @returns {Promise<User>} - A promise that resolves to the newly registered user.
-   * @throws {ApiError} - If the user already exists, or if there is an error while registering the user.
+   * Registers a new user or updates an existing user created via OAuth.
+   * If the user already has a password, a 409 error is thrown.
+   * If the user is created via OAuth, their password is updated.
+   * If the user is newly created, they are created with a local provider.
+   * @param {RegisterInput} data - The user data to register the user with.
+   * @returns {Promise<IUser>} - A promise that resolves to the registered user.
+   * @throws {ApiError} - If the user already exists and has a password, or if there is an error registering the user.
    */
   async registerUser(data: RegisterInput): Promise<IUser> {
     const existedUser = await User.findOne({ email: data.email });
 
     if (existedUser) {
-      throw new ApiError(409, "user already exists please login");
+      // If user already has password -> normal login
+
+      if (existedUser.password) {
+        throw new ApiError(409, "User already exists. Please login.");
+      }
+
+      // User created via OAuth
+
+      existedUser.password = data.password;
+
+      const alreadyLinked = existedUser.providers.some(
+        (p) => p.provider === "local"
+      );
+
+      if (!alreadyLinked) {
+        existedUser.providers.push({
+          provider: "local",
+          providerId: existedUser.email,
+        });
+      }
+
+      await existedUser.save();
+
+      return existedUser;
     }
 
     let avatarUrl: string | null;
     let avatarPublicId: string;
 
-    if (data.avatarPath) {
-      try {
-        const upload = await uploadOnCloudinary(data.avatarPath);
+    try {
+      const upload = await uploadOnCloudinary(data.avatarPath);
 
-        if (!upload?.secure_url) {
-          throw new ApiError(
-            500,
-            "something went wrong while uploading avatar"
-          );
-        }
-
-        avatarUrl = upload.secure_url;
-        avatarPublicId = upload.public_id;
-      } catch (error) {
-        logger.error("something went wrong while uploading avatar", error);
-        throw new ApiError(400, "something went wrong while uploading avatar");
+      if (!upload?.secure_url) {
+        throw new ApiError(500, "something went wrong while uploading avatar");
       }
-    } else {
-      throw new ApiError(400, "avatar is required");
+
+      avatarUrl = upload.secure_url;
+      avatarPublicId = upload.public_id;
+    } catch (error) {
+      logger.error("something went wrong while uploading avatar", error);
+      throw new ApiError(400, "something went wrong while uploading avatar");
     }
 
     const user = await User.create({
       email: data.email,
       password: data.password,
       fullName: data.fullName,
-      provider: data.provider,
+      providers: [{ provider: "local", providerId: data.email }],
       avatar: {
         url: avatarUrl,
         publicId: avatarPublicId,
@@ -143,6 +179,10 @@ class AuthService {
     const { accessToken, refreshToken } =
       await this.generateAccessAndRefreshToken(user._id.toString());
 
+    user.refreshToken = refreshToken;
+
+    await user.save({ validateBeforeSave: false });
+
     // remove password
     const userObj = user.toObject();
     delete userObj.password;
@@ -158,63 +198,52 @@ class AuthService {
    */
   async oauthLogin(data: OAuthProfileInput) {
     let user = await User.findOne({
-      provider: data.provider,
-      providerId: data.providerId,
+      "providers.provider": data.provider,
+      "providers.providerId": data.providerId,
     });
 
     // user exits with provider
     if (user) {
-      const { accessToken, refreshToken } =
-        await this.generateAccessAndRefreshToken(user._id.toString());
-
-      user.refreshToken = refreshToken;
-      await user.save({ validateBeforeSave: false });
-
-      return { user, accessToken, refreshToken };
+      this.issueTokens(user);
     }
 
-    // check if email exits
+    // find by email
 
     user = await User.findOne({ email: data.email });
 
-    if (user && user.provider !== "local" && user.provider !== data.provider) {
-      throw new ApiError(
-        400,
-        `Account already registered using ${user.provider}`
-      );
-    }
-
     if (user) {
-      if (user.provider === "local") {
-        user.provider = data.provider;
-        user.providerId = data.providerId;
+      const alreadyLinked = user.providers.some(
+        (p) => p.provider === data.provider
+      );
+
+      if (!alreadyLinked) {
+        user.providers.push({
+          provider: data.provider,
+          providerId: data.providerId,
+        });
 
         await user.save();
       }
-    } else {
-      user = await User.create({
-        email: data.email,
-        fullName: data.fullName,
-        provider: data.provider,
-        providerId: data.providerId,
-        avatar: data.avatar
-          ? {
-              url: data.avatar,
-              publicId: "",
-            }
-          : undefined,
-        isVerified: true,
-      });
+
+      return this.issueTokens(user);
     }
 
-    const { accessToken, refreshToken } =
-      await this.generateAccessAndRefreshToken(user._id.toString());
+    // create new user
 
-    user.refreshToken = refreshToken;
+    user = await User.create({
+      email: data.email,
+      fullName: data.fullName,
+      providers: [
+        {
+          provider: data.provider,
+          providerId: data.providerId,
+        },
+      ],
+      avatar: data.avatar ? { url: data.avatar, publicId: "" } : undefined,
+      isVerified: true,
+    });
 
-    await user.save({ validateBeforeSave: false });
-
-    return { user, accessToken, refreshToken };
+    return this.issueTokens(user);
   }
 
   /**
