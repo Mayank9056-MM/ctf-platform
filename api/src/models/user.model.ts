@@ -9,8 +9,12 @@ export interface IUser extends Document {
   email: string;
   fullName?: string;
   mobileNumber?: string;
-  provider: "local" | "google" | "github";
-  providerId?: string;
+  providers: [
+    {
+      provider: string;
+      providerId: string;
+    },
+  ];
   avatar?: {
     url: string;
     publicId: string;
@@ -70,6 +74,23 @@ const avatarSchema = new mongoose.Schema(
   { _id: false }
 );
 
+// providers schema
+
+const providerSchema = new mongoose.Schema(
+  {
+    provider: {
+      type: String,
+      enum: ["local", "google", "github"],
+      required: true,
+    },
+    providerId: {
+      type: String,
+      required: true,
+    },
+  },
+  { _id: false }
+);
+
 // main schema
 
 const userSchema = new mongoose.Schema<IUser>(
@@ -102,7 +123,7 @@ const userSchema = new mongoose.Schema<IUser>(
       type: String,
       required: [
         function (this: IUser): boolean {
-          return this.provider === "local";
+          return this.providers.some((p) => p.provider === "local");
         },
         "Password is required for local accounts",
       ],
@@ -114,18 +135,7 @@ const userSchema = new mongoose.Schema<IUser>(
       unique: true,
       sparse: true,
     },
-    provider: {
-      type: String,
-      enum: {
-        values: ["local", "google", "github"],
-        message: "Provider must be either local, google, or github",
-      },
-      default: "local",
-    },
-    providerId: {
-      type: String,
-      default: null,
-    },
+    providers: [providerSchema],
     avatar: avatarSchema,
     bio: {
       type: String,
@@ -171,7 +181,11 @@ const userSchema = new mongoose.Schema<IUser>(
     isVerified: {
       type: Boolean,
       default: function (this: IUser) {
-        return this.provider !== "local";
+        const hasLocalProvider = this.providers.some(
+          (p) => p.provider === "local"
+        );
+
+        return !hasLocalProvider;
       },
     },
     /**
@@ -231,7 +245,7 @@ const userSchema = new mongoose.Schema<IUser>(
 userSchema.index({ email: 1 });
 userSchema.index({ username: 1 });
 userSchema.index(
-  { provider: 1, providerId: 1 },
+  { "provider.provider": 1, "provider.providerId": 1 },
   { unique: true, sparse: true }
 );
 userSchema.index({ score: -1 });
@@ -250,9 +264,10 @@ userSchema.virtual("gravatar").get(function (this: IUser) {
 
 // Validate password length for local providerq
 userSchema.pre("validate", function (this: IUser) {
+  const localProvider = this.providers.some((p) => p.provider === "local");
   if (
     this.isNew &&
-    this.provider === "local" &&
+    localProvider &&
     this.password &&
     this.password.length < 8
   ) {
@@ -277,7 +292,8 @@ userSchema.pre("validate", async function (this: IUser) {
 
 // Hash password before saving the user
 userSchema.pre("save", async function (this: IUser) {
-  if (!this.isModified("password") || this.provider !== "local") {
+  const localProvider = this.providers.some((p) => p.provider === "local");
+  if (!this.isModified("password") || !localProvider) {
     return;
   }
 
