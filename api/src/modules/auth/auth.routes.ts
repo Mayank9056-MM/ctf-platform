@@ -22,7 +22,7 @@ authRouter.route("/register").post(upload.single("avatar"), register);
 authRouter.route("/login").post(login);
 authRouter.route("/forgot-password").post(forgotPassword);
 authRouter.route("/reset-password/:token").post(resetPassword);
-authRouter.route("/oauth-login").post(oauthLogin);
+authRouter.route("/oauth").post(oauthLogin);
 
 // Protected Routes
 authRouter.route("/logout").post(verifyAuth, logout);
