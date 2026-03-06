@@ -8,12 +8,12 @@ export type RegisterInput = {
   avatarPath: string;
 };
 
-export type OAuthProfile = {
+export type OAuthProfileInput = {
   provider: "google" | "github";
   fullName: string;
   providerId: string;
   email: string;
-  avatar: string;
+  avatar?: string;
 };
 
 export type LoginInput = {
