@@ -19,10 +19,7 @@ export const registerSchema = z.object({
 
 export const OAuthProfileSchema = z.object({
   provider: z.enum(["google", "github"]),
-  fullName: z.string(),
-  providerId: z.string(),
-  email: z.string().email({ message: "Invalid email address" }),
-  avatar: z.string().url({ message: "Avatar must be a valid URL" }),
+  token: z.string().min(20),
 });
 
 export const loginSchema = z.object({

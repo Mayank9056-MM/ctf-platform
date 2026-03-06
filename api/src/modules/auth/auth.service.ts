@@ -12,6 +12,7 @@ import {
   changeCurrentPasswordInput,
   forgotPasswordInput,
   LoginInput,
+  OAuthProfileInput,
   RegisterInput,
   resetPasswordInput,
   updateAccountDetailsInput,
@@ -28,8 +29,6 @@ type tokenPair = {
 
 class AuthService {
   // helper methods
-
-  // helper functions
 
   /**
    * Generates an access token and refresh token for a user based on their id.
@@ -151,9 +150,79 @@ class AuthService {
     return { accessToken, refreshToken, user: userObj };
   }
 
-  // OAuth Login (Google/Github)
-  async oauthLogin() {}
+  /**
+   * Login user with OAuth
+   * @param {OAuthProfileInput} data - OAuth profile data
+   * @returns {Promise<{user: Omit<IUser, "password">, accessToken: string, refreshToken: string}>} - Object containing user object, access token and refresh token
+   * @throws {ApiError} - If user is not found or invalid credentials are provided
+   */
+  async oauthLogin(data: OAuthProfileInput) {
+    let user = await User.findOne({
+      provider: data.provider,
+      providerId: data.providerId,
+    });
 
+    // user exits with provider
+    if (user) {
+      const { accessToken, refreshToken } =
+        await this.generateAccessAndRefreshToken(user._id.toString());
+
+      user.refreshToken = refreshToken;
+      await user.save({ validateBeforeSave: false });
+
+      return { user, accessToken, refreshToken };
+    }
+
+    // check if email exits
+
+    user = await User.findOne({ email: data.email });
+
+    if (user && user.provider !== "local" && user.provider !== data.provider) {
+      throw new ApiError(
+        400,
+        `Account already registered using ${user.provider}`
+      );
+    }
+
+    if (user) {
+      if (user.provider === "local") {
+        user.provider = data.provider;
+        user.providerId = data.providerId;
+
+        await user.save();
+      }
+    } else {
+      user = await User.create({
+        email: data.email,
+        fullName: data.fullName,
+        provider: data.provider,
+        providerId: data.providerId,
+        avatar: data.avatar
+          ? {
+              url: data.avatar,
+              publicId: "",
+            }
+          : undefined,
+        isVerified: true,
+      });
+    }
+
+    const { accessToken, refreshToken } =
+      await this.generateAccessAndRefreshToken(user._id.toString());
+
+    user.refreshToken = refreshToken;
+
+    await user.save({ validateBeforeSave: false });
+
+    return { user, accessToken, refreshToken };
+  }
+
+  /**
+   * Refresh access token
+   * @param {string} incomingRefreshToken - incoming refresh token
+   * @returns {Promise<{accessToken: string, refreshToken: string}>} - Object containing access token and refresh token
+   * @throws {ApiError} - If invalid refresh token is provided
+   */
   async refreshAccessToken(incomingRefreshToken: string) {
     const decodedToken = jwt.verify(
       incomingRefreshToken,
@@ -176,6 +245,13 @@ class AuthService {
     return { accessToken, refreshToken };
   }
 
+  /**
+   * Updates user account details.
+   * @param {updateAccountDetailsInput} data - object containing fields to be updated
+   * @param {Types.ObjectId} userId - id of the user to be updated
+   * @returns {Promise<IUser>} - updated user object
+   * @throws {ApiError} - If no fields are provided for update, if email already exists or if there is an error while updating user
+   */
   async updateAccountDetails(
     data: updateAccountDetailsInput,
     userId: Types.ObjectId
@@ -219,6 +295,13 @@ class AuthService {
     return updatedUser;
   }
 
+  /**
+   * Update user avatar
+   * @param {updateUserAvatarInput} data - The data to update user avatar with
+   * @param {IUser} user - The user to update avatar for
+   * @returns {Promise<IUser>} - A promise that resolves to the updated user
+   * @throws {ApiError} - If there is an error while updating user avatar
+   */
   async updateUserAvatar(data: updateUserAvatarInput, user: IUser) {
     let avatarUrl;
     let avatarPublicId;
@@ -262,6 +345,12 @@ class AuthService {
     return updatedUser;
   }
 
+  /**
+   * Change the password of a user
+   * @param {changeCurrentPasswordInput} data - The data to change the password with
+   * @throws {ApiError} - If the user is not found, or if the old password is invalid, or if the new password and confirm password do not match
+   * @returns {Promise<void>} - A promise that resolves when the password has been changed successfully
+   */
   async changePassword(data: changeCurrentPasswordInput) {
     const user = await User.findById(data.userId).select("+password");
 
@@ -286,6 +375,12 @@ class AuthService {
     return;
   }
 
+  /**
+   * Forgot password
+   * @param {forgotPasswordInput} data - The data to forgot the password with
+   * @throws {ApiError} - If the user is not found, or if the email could not be sent
+   * @returns {Promise<void>} - A promise that resolves when the password reset email has been sent successfully
+   */
   async forgotPassword(data: forgotPasswordInput) {
     const user = await User.findOne({ email: data.email });
 
@@ -310,6 +405,12 @@ class AuthService {
     return;
   }
 
+  /**
+   * Resets the password of a user using a reset token
+   * @param {resetPasswordInput} data - The data to reset the password with
+   * @throws {ApiError} - If the reset token is invalid or expired
+   * @returns {Promise<void>} - A promise that resolves when the password has been reset successfully
+   */
   async resetPassword(data: resetPasswordInput) {
     const user = await User.findOne({
       resetPasswordToken: crypto

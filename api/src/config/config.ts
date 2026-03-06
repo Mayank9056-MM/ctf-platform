@@ -34,6 +34,10 @@ const envSchema = z.object({
   BCRYPT_ROUNDS: z.coerce.number().default(12),
   RATE_LIMIT_WINDOW: z.coerce.number().default(15),
   RATE_LIMIT_MAX: z.coerce.number().default(100),
+
+  GOOGLE_CLIENT_ID: z.string(),
+  GOOGLE_CLIENT_SECRET: z.string(),
+  GOOGLE_REDIRECT_URI: z.string(),
 });
 
 export const config = envSchema.parse(process.env);
