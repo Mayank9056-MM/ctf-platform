@@ -14,15 +14,18 @@ import {
   updateUserAvatar,
 } from "./auth.controller";
 import { verifyAuth } from "../../middlewares/verifyAuth.middleware";
+import { authRateLimiter } from "../../middlewares/ratelimit.middleware";
 
 const authRouter = express.Router();
 
 // Public Routes
-authRouter.route("/register").post(upload.single("avatar"), register);
-authRouter.route("/login").post(login);
+authRouter
+  .route("/register")
+  .post(authRateLimiter, upload.single("avatar"), register);
+authRouter.route("/login").post(authRateLimiter, login);
 authRouter.route("/forgot-password").post(forgotPassword);
 authRouter.route("/reset-password/:token").post(resetPassword);
-authRouter.route("/oauth").post(oauthLogin);
+authRouter.route("/oauth").post(authRateLimiter, oauthLogin);
 
 // Protected Routes
 authRouter.route("/logout").post(verifyAuth, logout);
