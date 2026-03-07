@@ -27,11 +27,22 @@ export const loginSchema = z.object({
   password: z.string().min(8, "Password must be at least 8 characters"),
 });
 
-export const changeCurrentPasswordSchema = z.object({
-  oldPassword: z.string().min(8, "Password must be at least 8 characters"),
-  newPassword: z.string().min(8, "Password must be at least 8 characters"),
-  confirmPassword: z.string().min(8, "Password must be at least 8 characters"),
-});
+export const changeCurrentPasswordSchema = z
+  .object({
+    oldPassword: z.string().min(8, "Password must be at least 8 characters"),
+    newPassword: z.string().min(8, "Password must be at least 8 characters"),
+    confirmPassword: z
+      .string()
+      .min(8, "Password must be at least 8 characters"),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: "Password do not match",
+    path: ["confirmPassword"],
+  })
+  .refine((data) => data.oldPassword !== data.newPassword, {
+    message: "New Password must differ from old password",
+    path: ["newPassword"],
+  });
 
 export const updateAccountDetailsSchema = z.object({
   fullName: z
@@ -55,7 +66,6 @@ export const updateAccountDetailsSchema = z.object({
   bio: z
     .string()
     .max(5000, "Bio should be less than 5000 characters")
-    .min(50, "Bio should be more than 50 characters")
     .optional(),
 
   country: z.string().max(2, "Please enter a valid country").optional(),
