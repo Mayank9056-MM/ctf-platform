@@ -191,9 +191,9 @@ class AuthService {
   }
 
   /**
-   * Login user with OAuth
+   * Logs in a user with their OAuth profile
    * @param {OAuthProfileInput} data - OAuth profile data
-   * @returns {Promise<{user: Omit<IUser, "password">, accessToken: string, refreshToken: string}>} - Object containing user object, access token and refresh token
+   * @returns {Promise<{accessToken: string, refreshToken: string, user: IUser}>} - Object containing access token, refresh token and user object
    * @throws {ApiError} - If user is not found or invalid credentials are provided
    */
   async oauthLogin(data: OAuthProfileInput) {
@@ -204,7 +204,7 @@ class AuthService {
 
     // user exits with provider
     if (user) {
-      this.issueTokens(user);
+      return await this.issueTokens(user);
     }
 
     // find by email
@@ -284,9 +284,9 @@ class AuthService {
   async updateAccountDetails(
     data: updateAccountDetailsInput,
     userId: Types.ObjectId
-  ) {
+  ): Promise<IUser> {
     // remove undefined fields
-    const updateData = Object.fromEntries(
+    const updateData: Record<string, unknown> = Object.fromEntries(
       Object.entries(data).filter(([_, v]) => v !== undefined)
     );
 
@@ -304,6 +304,8 @@ class AuthService {
       if (existingUser) {
         throw new ApiError(409, "Email already in use");
       }
+
+      updateData.isVerified = false;
     }
 
     const updatedUser = await User.findByIdAndUpdate(
