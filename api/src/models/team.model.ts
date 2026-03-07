@@ -68,6 +68,7 @@ const teamSchema = new mongoose.Schema(
       {
         type: mongoose.Schema.Types.ObjectId,
         ref: "User",
+        unique: true,
       },
     ],
     invites: [
@@ -130,7 +131,7 @@ teamSchema.index({ isActive: 1, score: -1 });
 
 // Virtual for member count
 teamSchema.virtual("memberCount").get(function () {
-  return this.members.length;
+  return this.members?.length || 0;
 });
 
 /**
@@ -151,10 +152,10 @@ teamSchema.methods.isJoinCodeValid = function (code: string) {
 teamSchema.pre("save", async function () {
   const User = mongoose.model("User");
 
-  for (const member of this.members) {
-    const user = await User.findById(member);
+  const users = await User.find({ _id: { $in: this.members } });
 
-    if (user && user.teamId && user.teamId.toString() !== this._id.toString()) {
+  for (const user of users) {
+    if (user.teamId && user.teamId.toString() !== this._id.toString()) {
       throw new Error("User already belongs to another team");
     }
   }
