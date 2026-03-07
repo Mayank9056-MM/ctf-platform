@@ -51,13 +51,31 @@ export interface IUser extends Document {
 
 // helper functions
 
-const generateUsername = (email: string): string => {
+/**
+ * Generates a unique username based on the provided email address.
+ * The generated username is of the format `<base>_<random number>` where
+ * `<base>` is the first part of the email address without any special characters
+ * and `<random number>` is a random number between 1000 and 9999.
+ * If a username with the same `<base>` and a different `<random number>` already exists,
+ * the function will generate a new username with a different `<random number>`.
+ * The function will continue to generate new usernames until a unique one is found.
+ * @param {string} email - The email address to generate a username from
+ * @returns {Promise<string>} - A promise that resolves to a unique username
+ * @throws {Error} - If a unique username could not be generated after 10 attempts
+ */
+const generateUsername = async (email: string): Promise<string> => {
   const base = email
     .split("@")[0]
     .toLowerCase()
-    .replace(/[^a-z0-9]/g, "");
-  const random = Math.floor(1000 + Math.random() * 9000);
-  return `${base}_${random}`;
+    .replace(/[^a-z0-9]/g, "")
+    .substring(0, 20);
+  let username = `${base}_${Math.floor(1000 + Math.random() * 9000)}`;
+  let i = 0;
+  while (await mongoose.models.User.findOne({ username }).lean()) {
+    username = `${base}_${Date.now()}_${i++}`;
+    if (i > 10) throw new Error("Could not generate unique username");
+  }
+  return username;
 };
 
 // avatar schema
@@ -245,8 +263,8 @@ const userSchema = new mongoose.Schema<IUser>(
 userSchema.index({ email: 1 });
 userSchema.index({ username: 1 });
 userSchema.index(
-  { "provider.provider": 1, "provider.providerId": 1 },
-  { unique: true, sparse: true }
+  { "providers.provider": 1, "providers.providerId": 1 },
+  { sparse: true }
 );
 userSchema.index({ score: -1 });
 
@@ -277,12 +295,12 @@ userSchema.pre("validate", function (this: IUser) {
 
 userSchema.pre("validate", async function (this: IUser) {
   if (!this.username) {
-    let username = generateUsername(this.email);
+    let username = await generateUsername(this.email);
 
     let exists = await mongoose.models.User.findOne({ username });
 
     while (exists) {
-      username = generateUsername(this.email);
+      username = await generateUsername(this.email);
       exists = await mongoose.models.User.findOne({ username });
     }
 
