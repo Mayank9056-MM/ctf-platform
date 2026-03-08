@@ -15,6 +15,8 @@ import { CookieOptions } from "express";
 import User from "../../models/user.model";
 import { verifyGoogleToken } from "../oauth/google.verify";
 import { verifyGithubToken } from "../oauth/github.verify";
+import { cacheService } from "../../services/cacheService";
+import jwt from "jsonwebtoken";
 
 const register = asyncHandler(async (req, res) => {
   const parsed = registerSchema.safeParse(req.body);
@@ -165,6 +167,14 @@ const logout = asyncHandler(async (req, res) => {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
   };
+
+  // In logout controller, before clearing cookies
+  const accessToken = req.cookies?.accessToken;
+  if (accessToken) {
+    const decoded = jwt.decode(accessToken) as { exp: number };
+    const ttl = decoded?.exp - Math.floor(Date.now() / 1000);
+    if (ttl > 0) await cacheService.set(`blacklist:${accessToken}`, "1", ttl);
+  }
 
   return res
     .status(200)
