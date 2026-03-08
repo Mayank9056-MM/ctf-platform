@@ -1,0 +1,275 @@
+import { ApiError } from "../../utils/ApiError";
+import { ApiResponse } from "../../utils/ApiResponse";
+import { asyncHandler } from "../../utils/asyncHandler";
+import { teamService } from "./team.service";
+import {
+  createTeamSchema,
+  inviteUserSchema,
+  joinTeamByCodeSchema,
+  searchTeamSchema,
+  updateTeamSchema,
+} from "./team.validate";
+
+const createTeam = asyncHandler(async (req, res) => {
+  const parsed = createTeamSchema.safeParse(req.body);
+
+  console.log(parsed, "parsed team");
+  console.log(parsed.error, "parsed error");
+
+  if (!parsed.success) {
+    throw new ApiError(
+      400,
+      parsed.error?.message || "Something went wrong while creating team"
+    );
+  }
+
+  if (!req.user) {
+    throw new ApiError(401, "Unauthorized");
+  }
+
+  const team = await teamService.createTeam({
+    ...parsed.data,
+    ownerId: req.user._id,
+  });
+
+  return res
+    .status(201)
+    .json(new ApiResponse(201, team, "Team created successfully"));
+});
+
+const getTeam = asyncHandler(async (req, res) => {
+  const id = req.params.id as string;
+
+  // Include invites only if the requester is in this team
+
+  const isRequestMember = req.user?.teamId?.toString() === id;
+
+  const team = await teamService.getTeamById(id, isRequestMember);
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, team, "Team retrieved successfully"));
+});
+
+const getMyTeam = asyncHandler(async (req, res) => {
+  const team = await teamService.getMyTeam(req.user!._id);
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        team,
+        team ? "Your team retrieved" : "You are not in a team"
+      )
+    );
+});
+
+const updateTeam = asyncHandler(async (req, res) => {
+  const teamId = req.params.id as string;
+
+  if (!teamId) {
+    throw new ApiError(400, "Team id is required");
+  }
+
+  const parsed = updateTeamSchema.safeParse(req.body);
+
+  if (!parsed.success) {
+    throw new ApiError(
+      400,
+      parsed.error?.message || "Something went wrong while updating team"
+    );
+  }
+
+  const team = await teamService.updateTeam({
+    ...parsed.data,
+    teamId,
+    requesterId: req.user!._id,
+  });
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, team, "Team updated successfully"));
+});
+
+const generateJoinCode = asyncHandler(async (req, res) => {
+  const id = req.params.id as string;
+
+  if (!id) {
+    throw new ApiError(400, "Team id is required");
+  }
+
+  const code = await teamService.generateJoinCode(id, req.user!._id);
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        { joinCode: code },
+        "Join code generated successfully"
+      )
+    );
+});
+
+const joinTeamByCode = asyncHandler(async (req, res) => {
+  const parsed = joinTeamByCodeSchema.safeParse(req.body);
+
+  if (!parsed.success) {
+    throw new ApiError(
+      400,
+      parsed.error?.message || "Something went wrong while joining team"
+    );
+  }
+
+  const team = await teamService.joinTeamByCode(
+    req.user!._id,
+    parsed.data.code
+  );
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, team, "Team joined successfully"));
+});
+
+const inviteUser = asyncHandler(async (req, res) => {
+  const id = req.params.id as string;
+
+  if (!id) {
+    throw new ApiError(400, "Team id is required");
+  }
+
+  const parsed = inviteUserSchema.safeParse(req.body);
+
+  if (!parsed.success) {
+    throw new ApiError(
+      400,
+      parsed.error?.message || "Something went wrong while inviting user"
+    );
+  }
+
+  await teamService.inviteUser(id, req.user!._id, parsed.data.username);
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, {}, `Invitation sent to ${parsed.data.username}`)
+    );
+});
+
+const acceptInvite = asyncHandler(async (req, res) => {
+  const id = req.params.id as string;
+
+  if (!id) {
+    throw new ApiError(400, "Team id is required");
+  }
+
+  const team = await teamService.acceptInviteSerive(req.user!._id, id);
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, team, "Invite accepted. Welcome to the team!"));
+});
+
+const declineInvite = asyncHandler(async (req, res) => {
+  const id = req.params.id as string;
+
+  if (!id) {
+    throw new ApiError(400, "Team id is required");
+  }
+
+  await teamService.declineInvite(req.user!._id, id);
+
+  return res.status(200).json(new ApiResponse(200, {}, "Invite declined"));
+});
+
+const leaveTeam = asyncHandler(async (req, res) => {
+  await teamService.leaveTeam(req.user!._id);
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, {}, "You have left the team"));
+});
+
+const kickMember = asyncHandler(async (req, res) => {
+  const id = req.params.id as string;
+
+  const userId = req.params.userId as string;
+
+  if (!id) {
+    throw new ApiError(400, "Member id is required");
+  }
+
+  if (!userId) {
+    throw new ApiError(400, "User id is required");
+  }
+
+  await teamService.kickMember(id, req.user!._id, userId);
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, {}, "Member removed from team"));
+});
+
+const searchTeams = asyncHandler(async (req, res) => {
+  const parsed = searchTeamSchema.safeParse(req.body);
+
+  if (!parsed.success) {
+    throw new ApiError(
+      400,
+      parsed.error.message || "Something went wrong while searching teams"
+    );
+  }
+
+  const result = await teamService.searchTeams(parsed.data);
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        teams: result.teams,
+        meta: {
+          page: result.page,
+          limit: result.limit,
+          total: result.total,
+          totalPages: Math.ceil(result.total / result.limit),
+          hasNext: result.page * result.limit < result.total,
+          hasPrev: result.page > 1,
+        },
+      },
+      "Teams found successfully"
+    )
+  );
+});
+
+// Admin
+
+const adminDisbandTeam = asyncHandler(async (req, res) => {
+  const id = req.params.id as string;
+
+  if (!id) {
+    throw new ApiError(400, "Team id is required");
+  }
+
+  await teamService.adminDisbandTeam(id);
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, {}, "Team disbanded successfully"));
+});
+
+export {
+  createTeam,
+  getTeam,
+  getMyTeam,
+  updateTeam,
+  generateJoinCode,
+  joinTeamByCode,
+  inviteUser,
+  acceptInvite,
+  declineInvite,
+  leaveTeam,
+  kickMember,
+  searchTeams,
+  adminDisbandTeam,
+};
