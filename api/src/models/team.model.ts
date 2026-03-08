@@ -32,6 +32,7 @@ export interface ITeam extends Document {
   country?: string;
 
   generateJoinCode(): string;
+  isJoinCodeValid(code: string): boolean;
 }
 
 const teamSchema = new mongoose.Schema(
@@ -140,7 +141,7 @@ teamSchema.virtual("memberCount").get(function () {
  * @returns {boolean} true if the join code is valid, false otherwise.
  * A join code is valid if it matches the team's join code, the join code has not expired, and the team is active.
  */
-teamSchema.methods.isJoinCodeValid = function (code: string) {
+teamSchema.methods.isJoinCodeValid = function (code: string): Promise<boolean> {
   return (
     this.joinCode === code &&
     this.joinCodeExpire &&
@@ -182,4 +183,6 @@ teamSchema.methods.generateJoinCode = function (): string {
   return this.joinCode;
 };
 
-export default mongoose.model<ITeam>("Team", teamSchema);
+const Team = mongoose.model<ITeam>("Team", teamSchema);
+
+export default Team;

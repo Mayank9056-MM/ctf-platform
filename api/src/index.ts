@@ -88,9 +88,11 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
 
 // import routes
 import authRouter from "./modules/auth/auth.routes";
+import teamRouter from "./modules/teams/team.route";
 
 // routes
 app.use("/api/v1/auth", authRouter);
+app.use("/api/v1/team", teamRouter);
 
 // It should be always at bottom
 // 404 handler
