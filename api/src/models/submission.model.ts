@@ -297,6 +297,9 @@ submissionSchema.statics.getHistory = async function (
     .lean();
 };
 
-const Submission = mongoose.model("Submission", submissionSchema);
+const Submission = mongoose.model<ISubmission, ISubmissionModel>(
+  "Submission",
+  submissionSchema
+);
 
 export default Submission;
