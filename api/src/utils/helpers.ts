@@ -1,38 +1,23 @@
-import bcrypt from "bcrypt";
+// scoring Utility
 
-export class AppError extends Error {
-  constructor(
-    public statusCode: number,
-    public message: string,
-    public isOperational = true
-  ) {
-    super(message);
-    Object.setPrototypeOf(this, AppError.prototype);
-  }
+/**
+ * Exponential decay: points reduce as more players solve the challenge.
+ * max(minPoints, floor(base × (0.5 + 0.5 × e^(−0.05 × (solveCount − 1)))))
+ *
+ * Examples (base=500, min=100):
+ *   0 solves  → 500 pts   |   10 → ~439   |   50 → ~222   |  100 → ~108
+ */
+export function calculateDynamicPoints(
+  basePoints: number,
+  solveCount: number,
+  scoringType: "static" | "dynamic",
+  minPoints: number
+): number {
+  if (scoringType === "static") return basePoints;
+
+  const decayed = Math.floor(
+    basePoints * (0.5 + 0.5 * Math.exp(-0.05 * Math.max(0, solveCount - 1)))
+  );
+
+  return Math.max(minPoints, decayed);
 }
-
-export const hashPassword = async (password: string): Promise<string> => {
-  return await bcrypt.hash(password, 12);
-};
-
-export const verifyPassword = async (
-  password: string,
-  hashedPassword: string
-): Promise<boolean> => {
-  return await bcrypt.compare(password, hashedPassword);
-};
-
-export const generateRandomString = (length: number): string => {
-  const chars =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  let result = "";
-  for (let i = 0; i < length; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result;
-};
-
-// export const sanitizeUser = (user) => {
-//   const { password, ...sanitizedUser } = user;
-//   return sanitizedUser;
-// };
