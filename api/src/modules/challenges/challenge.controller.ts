@@ -80,3 +80,5 @@ const adminRemoveAttachment = asyncHandler(async (req, res) => {});
 const adminGetStats = asyncHandler(async (req, res) => {});
 
 const adminGetSubmissions = asyncHandler(async (req, res) => {});
+
+export { getChallenges };
