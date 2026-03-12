@@ -864,6 +864,43 @@ class ChallengeService {
 
     return challenge;
   }
+
+  /**
+   * Removes a hint from a challenge.
+   * @param {string} challengeId - The id of the challenge to remove the hint from.
+   * @param {number} hintIndex - The index of the hint to remove.
+   * @param {Types.ObjectId} requesterId - The id of the user performing the action.
+   * @returns {Promise<IChallenge>} - A promise which resolves to the updated challenge document.
+   * @throws {ApiError} 400 - If the hint index is invalid.
+   */
+  async removeHint(
+    challengeId: string,
+    hintIndex: number,
+    requesterId: Types.ObjectId
+  ): Promise<IChallenge> {
+    const challenge = await this.findActiveChallenges(challengeId);
+
+    if (hintIndex < 0 || hintIndex >= challenge.hints.length) {
+      throw new ApiError(400, "Invalid hint index");
+    }
+
+    challenge.hints.splice(hintIndex, 1);
+    await challenge.save({ validateBeforeSave: false });
+
+    await (AuditLog as unknown as IAuditLogModel).record({
+      action: "challenge:hint_remove",
+      outcome: "success",
+      actor: {
+        userId: requesterId,
+        username: null,
+        role: "admin",
+        type: "admin",
+      },
+      metadata: { hintIndex },
+    });
+
+    return challenge;
+  }
 }
 
 export const challengeService = new ChallengeService();
