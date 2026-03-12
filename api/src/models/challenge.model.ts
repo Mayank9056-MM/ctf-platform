@@ -188,6 +188,7 @@ const dockerConfigSchema = new mongoose.Schema<IDockerConfig>({
   flag: {
     type: String,
     default: "",
+    select: false,
   },
 });
 
