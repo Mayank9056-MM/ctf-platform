@@ -5,7 +5,7 @@ import Challenge, {
 } from "../../models/challenge.model";
 import { ApiError } from "../../utils/ApiError";
 import crypto from "crypto";
-import Submission, { ISubmissionModel } from "../../models/submission.model";
+import Submission from "../../models/submission.model";
 import {
   DIFFICULTY_SORT_ORDER,
   FLAG_SHARE_ALERT_THRESHOLD,
@@ -17,14 +17,27 @@ import User from "../../models/user.model";
 import { calculateDynamicPoints } from "../../utils/helpers";
 import {
   challengeFilters,
+  CreateChallengePayload,
   purchasedHintResult,
   SubmitFlagPayload,
   SubmitFlagResult,
+  UpdateChallengeInput,
 } from "./challenge.types";
 import Team from "../../models/team.model";
 import AuditLog, { IAuditLogModel } from "../../models/auditlog.model";
+import escapeStringRegexp from "escape-string-regexp";
 
 class ChallengeService {
+  private ALLOWED_CHALLENGE_UPDATE_FIELDS = [
+    "title",
+    "description",
+    "difficulty",
+    "points",
+    "category",
+    "flag",
+    "isVisible",
+  ];
+
   // Private helpers
 
   /**
@@ -152,7 +165,7 @@ class ChallengeService {
     }
 
     if (search) {
-      query.title = { $regex: search, $options: "i" };
+      query.title = { $regex: escapeStringRegexp(search), $options: "i" };
     }
 
     // Build mongo sort - difficulty handled post-query
@@ -593,6 +606,132 @@ class ChallengeService {
       page,
       limit,
     };
+  }
+
+  // Admin Operations
+
+  /**
+   * Creates a new challenge. The challenge will not be visible until the 'isVisible' field is explicitly set to true.
+   * @param {CreateChallengePayload} data - The challenge data to create with.
+   * @returns {Promise<IChallenge>} - A promise which resolves to the newly created challenge.
+   * @throws {ApiError} 400 - If a challenge with the same title already exists.
+   * @throws {ApiError} 500 - If the challenge creation fails.
+   */
+  async createChallenge(data: CreateChallengePayload): Promise<IChallenge> {
+    const exists = await Challenge.findOne({
+      title: { $regex: new RegExp(`^${escapeStringRegexp(data.title)}$`, "i") },
+    });
+
+    if (exists) {
+      throw new ApiError(400, "Challenge title already exists");
+    }
+
+    const challenge = await Challenge.create({
+      ...data,
+      author: data.authorId,
+      isVisible: false, // must be explicitly set
+    });
+
+    if (!challenge) {
+      throw new ApiError(500, "Failed to create challenge");
+    }
+
+    await (AuditLog as unknown as IAuditLogModel).record({
+      action: "challenge:create",
+      outcome: "success",
+      actor: {
+        userId: data.authorId,
+        username: null,
+        role: "admin",
+        type: "admin",
+      },
+      target: {
+        id: challenge._id as Types.ObjectId,
+        collection: "Challenge",
+        label: challenge.title,
+      },
+    });
+
+    return challenge;
+  }
+
+  /**
+   * Updates a challenge with the given data. The challenge must be visible.
+   * @param {string} challengeId - The id of the challenge to update.
+   * @param {UpdateChallengeInput} data - The challenge data to update with.
+   * @param {Types.ObjectId} requesterId - The id of the user performing the update.
+   * @returns {Promise<IChallenge>} - A promise which resolves to the updated challenge.
+   * @throws {ApiError} 400 - If the challenge title already exists, or if the update contains invalid fields.
+   * @throws {ApiError} 500 - If the challenge update fails.
+   */
+  async updateChallenge(
+    challengeId: string,
+    data: UpdateChallengeInput,
+    requesterId: Types.ObjectId
+  ): Promise<IChallenge> {
+    const challenge = await this.findActiveChallenges(challengeId);
+
+    if (data.title && data.title !== challenge.title) {
+      const duplicate = await Challenge.findOne({
+        title: {
+          $regex: new RegExp(`^${escapeStringRegexp(data.title)}$`, "i"),
+        },
+        _id: { $ne: challengeId },
+      });
+
+      if (duplicate) {
+        throw new ApiError(400, "Challenge title already exists");
+      }
+    }
+
+    const before: Record<string, unknown> = {};
+    const after: Record<string, unknown> = {};
+    const changedFields: string[] = [];
+
+    for (const [key, value] of Object.entries(data)) {
+      if (
+        !this.ALLOWED_CHALLENGE_UPDATE_FIELDS.includes(key) ||
+        value === undefined
+      )
+        continue;
+
+      const currentVal = challenge.get(key);
+
+      if (JSON.stringify(currentVal) !== JSON.stringify(value)) {
+        before[key] = currentVal;
+        after[key] = value;
+        changedFields.push(key);
+
+        challenge.set(key, value);
+      }
+    }
+
+    await challenge.save();
+
+    if (changedFields.length > 0) {
+      await (AuditLog as unknown as IAuditLogModel).record({
+        action: "challenge:update",
+        outcome: "success",
+        actor: {
+          userId: requesterId,
+          username: null,
+          role: "admin",
+          type: "admin",
+        },
+        target: {
+          id: challenge._id as Types.ObjectId,
+          collection: "Challenge",
+          label: challenge.title,
+        },
+        diff: {
+          before,
+          after,
+          changedFields,
+        },
+      });
+    }
+
+    return challenge;
   }
 }
 
