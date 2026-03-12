@@ -16,6 +16,7 @@ import logger from "../../utils/logger";
 import User from "../../models/user.model";
 import { calculateDynamicPoints } from "../../utils/helpers";
 import {
+  AddHintInput,
   challengeFilters,
   CreateChallengePayload,
   purchasedHintResult,
@@ -812,6 +813,56 @@ class ChallengeService {
         label: challenge.title,
       },
     });
+  }
+
+  /**
+   * Adds a hint to a challenge.
+   * Throws 409 if a hint with the given order already exists.
+   * Audit logs the action with the adding user and the challenge title.
+   * @param {string} challengeId - The id of the challenge to add the hint to.
+   * @param {AddHintInput} hint - The hint to add.
+   * @param {Types.ObjectId} requesterId - The id of the user performing the action.
+   * @returns {Promise<IChallenge>} - A promise which resolves to the updated challenge.
+   */
+  async addHint(
+    challengeId: string,
+    hint: AddHintInput,
+    requesterId: Types.ObjectId
+  ): Promise<IChallenge> {
+    const challenge = await this.findActiveChallenges(challengeId);
+
+    // Enforce unique order values
+    const orderExits = challenge.hints.some((h) => h.order === hint.order);
+
+    if (orderExits) {
+      throw new ApiError(409, `A hint with order ${hint.order} already exists`);
+    }
+
+    challenge.hints.push(hint as never);
+
+    await challenge.save({ validateBeforeSave: false });
+
+    await (AuditLog as unknown as IAuditLogModel).record({
+      action: "challenge:hint_add",
+      outcome: "success",
+      actor: {
+        userId: requesterId,
+        username: null,
+        role: "admin",
+        type: "admin",
+      },
+      target: {
+        id: challenge._id as Types.ObjectId,
+        collection: "Challenge",
+        label: challenge.title,
+      },
+      metadata: {
+        hintOrder: hint.order,
+        cost: hint.cost,
+      },
+    });
+
+    return challenge;
   }
 }
 
