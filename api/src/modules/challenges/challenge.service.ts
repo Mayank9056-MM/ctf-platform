@@ -17,12 +17,14 @@ import User from "../../models/user.model";
 import { calculateDynamicPoints } from "../../utils/helpers";
 import {
   challengeFilters,
+  CreateChallengePayload,
   purchasedHintResult,
   SubmitFlagPayload,
   SubmitFlagResult,
 } from "./challenge.types";
 import Team from "../../models/team.model";
 import AuditLog, { IAuditLogModel } from "../../models/auditlog.model";
+import { exists } from "fs";
 
 class ChallengeService {
   // Private helpers
@@ -593,6 +595,53 @@ class ChallengeService {
       page,
       limit,
     };
+  }
+
+  // Admin Operations
+
+  /**
+   * Creates a new challenge. The challenge will not be visible until the 'isVisible' field is explicitly set to true.
+   * @param {CreateChallengePayload} data - The challenge data to create with.
+   * @returns {Promise<IChallenge>} - A promise which resolves to the newly created challenge.
+   * @throws {ApiError} 400 - If a challenge with the same title already exists.
+   * @throws {ApiError} 500 - If the challenge creation fails.
+   */
+  async createChallenge(data: CreateChallengePayload): Promise<IChallenge> {
+    const exists = await Challenge.findOne({
+      title: { $regex: new RegExp(`^${data.title}$`, "i") },
+    });
+
+    if (exists) {
+      throw new ApiError(400, "Challenge title already exists");
+    }
+
+    const challenge = await Challenge.create({
+      ...data,
+      author: data.authorId,
+      isVisible: false, // must be explicitly set
+    });
+
+    if (!challenge) {
+      throw new ApiError(500, "Failed to create challenge");
+    }
+
+    await (AuditLog as unknown as IAuditLogModel).record({
+      action: "challenge:create",
+      outcome: "success",
+      actor: {
+        userId: data.authorId,
+        username: null,
+        role: "admin",
+        type: "admin",
+      },
+      target: {
+        id: challenge._id as Types.ObjectId,
+        collection: "Challenge",
+        label: challenge.title,
+      },
+    });
+
+    return challenge;
   }
 }
 
