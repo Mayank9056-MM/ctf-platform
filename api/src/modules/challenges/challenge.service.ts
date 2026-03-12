@@ -15,7 +15,12 @@ import {
 import logger from "../../utils/logger";
 import User from "../../models/user.model";
 import { calculateDynamicPoints } from "../../utils/helpers";
-import { challengeFilters } from "./challenge.types";
+import {
+  challengeFilters,
+  purchasedHintResult,
+  SubmitFlagPayload,
+  SubmitFlagResult,
+} from "./challenge.types";
 import Team from "../../models/team.model";
 import AuditLog, { IAuditLogModel } from "../../models/auditlog.model";
 
@@ -288,7 +293,13 @@ class ChallengeService {
     };
   }
 
-  async submitFlag(data: SubmitFlagInput): Promise<SubmitFlagResult> {
+  /**
+   * Submit a flag for a challenge.
+   * @param data - Payload containing the user, team, challenge, flag, IP, and user agent.
+   * @returns A promise resolving to a SubmitFlagResult object.
+   * @throws ApiError - If the challenge does not exist, is not visible, or has already been solved by the user.
+   */
+  async submitFlag(data: SubmitFlagPayload): Promise<SubmitFlagResult> {
     const { userId, teamId, challengeId, flag, ip, userAgent } = data;
 
     const challengeObjId = new Types.ObjectId(challengeId);
@@ -418,6 +429,115 @@ class ChallengeService {
       message: isFirstBlood
         ? `🩸 First blood! +${pointsAwarded} points`
         : `Correct! +${pointsAwarded} points`,
+    };
+  }
+
+  /**
+   * Purchases a hint for a challenge.
+   * Returns the text of the hint, the points deducted from the user's score,
+   * and the index of the hint purchased.
+   *
+   * If the user has already solved the challenge, the hint text is returned
+   * for free.
+   *
+   * If the user has already purchased the hint, the function returns immediately
+   * without deducting points or modifying the user's document.
+   *
+   * @throws {ApiError} 400 - Invalid hint index
+   * @throws {ApiError} 404 - User not found
+   * @throws {ApiError} 400 - Insufficient points
+   */
+  async purchaseHint(
+    challengeId: string,
+    hintIndex: number,
+    userId: Types.ObjectId
+  ): Promise<purchasedHintResult> {
+    const challenge = await this.findVisibleChallenge(challengeId);
+
+    if (hintIndex < 0 || hintIndex >= challenge.hints.length) {
+      throw new ApiError(
+        400,
+        `Invalid hint index. This challenge has ${challenge.hints.length} hint(s).`
+      );
+    }
+
+    const user = await User.findById(userId).select(
+      "hintsPurchased score solvedChallenges"
+    );
+
+    if (!user) {
+      throw new ApiError(404, "User not found");
+    }
+
+    // Already solved - return hint text for free
+
+    const alreadySolved = user.solvedChallenges.some(
+      (id) => id.toString() === challengeId
+    );
+
+    if (alreadySolved) {
+      return {
+        hintText: challenge.hints[hintIndex].text,
+        pointsDeducted: 0,
+        hintIndex,
+      };
+    }
+
+    // Already purchased - idempotent return
+
+    const alreadyPurchased = user.hintsPurchased?.some(
+      (h) =>
+        h.challengeId.toString() === challengeId && h.hintIndex === hintIndex
+    );
+
+    if (alreadyPurchased) {
+      return {
+        hintText: challenge.hints[hintIndex].text,
+        pointsDeducted: 0,
+        hintIndex,
+      };
+    }
+
+    const hint = challenge.hints[hintIndex];
+
+    if (hint.cost > 0 && user.score < hint.cost) {
+      throw new ApiError(
+        400,
+        `Insufficient points. This hint costs ${hint.cost} points. You have ${user.score}.`
+      );
+    }
+
+    const pointsDeducted = hint.cost;
+
+    user.score = Math.max(0, user.score - pointsDeducted);
+    user.hintsPurchased = user.hintsPurchased ?? [];
+
+    user.hintsPurchased.push({
+      challengeId: new Types.ObjectId(challengeId),
+      hintIndex,
+      purchasedAt: new Date(),
+    });
+
+    await user.save({ validateBeforeSave: false });
+
+    await (AuditLog as unknown as IAuditLogModel).record({
+      action: "submission:hint_purchase",
+      outcome: "success",
+      actor: { userId, username: null, role: null, type: "user" },
+      target: {
+        id: challenge._id as Types.ObjectId,
+        collection: "Challenge",
+        label: challenge.title,
+      },
+      metadata: {
+        hintIndex,
+        pointsDeducted,
+      },
+    });
+    return {
+      hintText: hint.text,
+      pointsDeducted,
+      hintIndex,
     };
   }
 }
