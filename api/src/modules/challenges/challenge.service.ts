@@ -733,6 +733,40 @@ class ChallengeService {
 
     return challenge;
   }
+
+  async setVisibility(
+    challengeId: string,
+    isVisible: boolean,
+    requesterId: Types.ObjectId
+  ): Promise<IChallenge> {
+    const challenge = await this.findActiveChallenges(challengeId);
+
+    const wasVisible = challenge.isVisible;
+    challenge.isVisible = isVisible;
+    await challenge.save({ validateBeforeSave: false });
+
+    await (AuditLog as unknown as IAuditLogModel).record({
+      action: isVisible ? "challenge:publish" : "challenge:archive",
+      outcome: "success",
+      actor: {
+        userId: requesterId,
+        username: null,
+        role: "admin",
+        type: "admin",
+      },
+      target: {
+        id: challenge._id as Types.ObjectId,
+        collection: "Challenge",
+        label: challenge.title,
+      },
+      metadata: {
+        wasVisible,
+        isVisible,
+      },
+    });
+
+    return challenge;
+  }
 }
 
 export const challengeService = new ChallengeService();
