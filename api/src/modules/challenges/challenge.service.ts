@@ -5,7 +5,7 @@ import Challenge, {
 } from "../../models/challenge.model";
 import { ApiError } from "../../utils/ApiError";
 import crypto from "crypto";
-import Submission from "../../models/submission.model";
+import Submission, { ISubmission } from "../../models/submission.model";
 import {
   DIFFICULTY_SORT_ORDER,
   FLAG_SHARE_ALERT_THRESHOLD,
@@ -16,7 +16,9 @@ import logger from "../../utils/logger";
 import User from "../../models/user.model";
 import { calculateDynamicPoints } from "../../utils/helpers";
 import {
+  AddAttachmentInput,
   AddHintInput,
+  AdminChallengeStats,
   challengeFilters,
   CreateChallengePayload,
   purchasedHintResult,
@@ -568,12 +570,20 @@ class ChallengeService {
    *   limit: number,
    * }>} - A promise which resolves to an object containing the list of solves, total number of solves, page number and limit.
    */
-  async getChallengeSolves(challengeId: string, page = 1, limit = 20) {
-    // confirm challenge exists and visible
-
+  async getChallengeSolves(
+    challengeId: string,
+    page = 1,
+    limit = 20
+  ): Promise<{
+    solves: ISubmission[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
     page = Math.max(1, page);
     limit = Math.min(Math.max(1, limit), 100);
 
+    // confirm challenge exists and visible
     const exists = await Challenge.exists({
       _id: challengeId,
       isVisible: true,
@@ -900,6 +910,214 @@ class ChallengeService {
     });
 
     return challenge;
+  }
+
+  /**
+   * Adds an attachment to a challenge.
+   * @param {string} challengeId - The id of the challenge to add the attachment to.
+   * @param {AddAttachmentInput} attachment - The attachment data to add.
+   * @param {Types.ObjectId} requesterId - The id of the user performing the action.
+   * @returns {Promise<IChallenge>} - A promise which resolves to the updated challenge document.
+   * @throws {ApiError} 400 - If the challenge is not found.
+   */
+  async addAttachment(
+    challengeId: string,
+    attachment: AddAttachmentInput,
+    requesterId: Types.ObjectId
+  ): Promise<IChallenge> {
+    const challenge = await this.findActiveChallenges(challengeId);
+
+    challenge.attachments.push({
+      ...attachment,
+      uploadedAt: new Date(),
+    } as never);
+    await challenge.save({ validateBeforeSave: false });
+
+    await (AuditLog as unknown as IAuditLogModel).record({
+      action: "challenge:attachment_add",
+      outcome: "success",
+      actor: {
+        userId: requesterId,
+        username: null,
+        role: "admin",
+        type: "admin",
+      },
+      target: {
+        id: challenge._id as Types.ObjectId,
+        collection: "Challenge",
+        label: challenge.title,
+      },
+      metadata: {
+        fileName: attachment.name,
+        size: attachment.size,
+      },
+    });
+    return challenge;
+  }
+
+  /**
+   * Removes an attachment from a challenge.
+   * @param {string} challengeId - The id of the challenge to remove the attachment from.
+   * @param {string} attachmentId - The id of the attachment to remove.
+   * @param {Types.ObjectId} requesterId - The id of the user performing the action.
+   * @returns {Promise<IChallenge>} - A promise which resolves to the updated challenge document.
+   * @throws {ApiError} 404 - If the attachment is not found.
+   */
+  async removeAttachment(
+    challengeId: string,
+    attachmentId: string,
+    requesterId: Types.ObjectId
+  ): Promise<IChallenge> {
+    const challenge = await this.findActiveChallenges(challengeId);
+
+    const idx = challenge.attachments.findIndex(
+      (a) => a._id.toString() === attachmentId
+    );
+
+    if (idx === -1) {
+      throw new ApiError(404, "Attachment not found");
+    }
+
+    const removed = challenge.attachments[idx];
+    challenge.attachments.splice(idx, 1);
+    await challenge.save({ validateBeforeSave: false });
+
+    await (AuditLog as unknown as IAuditLogModel).record({
+      action: "challenge:attachment_remove",
+      outcome: "success",
+      actor: {
+        userId: requesterId,
+        username: null,
+        role: "admin",
+        type: "admin",
+      },
+      target: {
+        id: challenge._id as Types.ObjectId,
+        collection: "Challenge",
+        label: challenge.title,
+      },
+      metadata: {
+        fileName: removed.name,
+      },
+    });
+
+    return challenge;
+  }
+
+  /**
+   * Retrieves a list of active challenges for admin ops.
+   * @param {number} [page=1] - The page number to fetch.
+   * @param {number} [limit=50] - The number of challenges to fetch per page.
+   * @returns A promise which resolves to an object containing the list of challenges, total number of challenges, page number, and limit.
+   * @throws {ApiError} 404 - If no challenges are found.
+   */
+  async getAdminChallenges(page = 1, limit = 50) {
+    page = Math.max(1, page);
+    limit = Math.min(Math.max(1, limit), 100);
+
+    const [challenges, total] = await Promise.all([
+      Challenge.find({
+        isActive: true,
+      })
+        .select("-flag")
+        .populate("author", "username avatar")
+        .sort({ createAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+      Challenge.countDocuments({ isActive: true }),
+    ]);
+
+    if (!challenges) {
+      throw new ApiError(404, "Challenges not found");
+    }
+
+    return {
+      challenges,
+      total,
+      page,
+      limit,
+    };
+  }
+
+  /**
+   * Retrieves aggregated statistics for admin ops.
+   * @returns A promise which resolves to an object containing statistics by category, total number of challenges, visible challenges, and total solves.
+   */
+  async getAdminStats(): Promise<AdminChallengeStats> {
+    const [byCategory, totals] = await Promise.all([
+      Challenge.aggregate([
+        { $match: { isActive: true } },
+        {
+          $group: {
+            _id: "$category",
+            count: { $sum: 1 },
+            totalSolves: { $sum: "$solveCount" },
+            avgPoints: { $avg: "$points" },
+            visible: { $sum: { $cond: ["$isVisible", 1, 0] } },
+          },
+        },
+        { $sort: { count: -1 } },
+      ]),
+      Challenge.aggregate([
+        { $match: { isActive: true } },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: 1 },
+            visible: { $sum: { $cond: ["$isVisible", 1, 0] } },
+            totalSolves: { $sum: "$solveCount" },
+          },
+        },
+      ]),
+    ]);
+
+    return {
+      byCategory,
+      totals: totals[0] ?? { total: 0, visible: 0, totalSolves: 0 },
+    };
+  }
+
+  /**
+   * Retrieve a list of submissions for a challenge, sorted newest-first.
+   * Optional filtration: isCorrect (true/false) to filter by correct/incorrect submissions.
+   * Optional pagination: page and limit.
+   * @param {string} challengeId - The challenge to fetch submissions for.
+   * @param {number} [page=1] - The page number to fetch.
+   * @param {number} [limit=50] - The number of submissions to fetch per page.
+   * @param {boolean} [isCorrect] - Optional filtration by correct/incorrect submissions.
+   * @returns {Promise<{
+   *   submissions: ISubmission[],
+   *   total: number,
+   *   page: number,
+   *   limit: number
+   * }>} - A promise which resolves to an object containing the list of submissions, total number of submissions, page number and limit.
+   */
+  async getAdminSubmissions(
+    challengeId: string,
+    page = 1,
+    limit = 50,
+    isCorrect?: boolean
+  ) {
+    page = Math.max(1, page);
+    limit = Math.min(Math.max(1, limit), 100);
+
+    const query: Record<string, unknown> = { challenge: challengeId };
+    if (isCorrect !== undefined) query.isCorrect = isCorrect;
+
+    const [submissions, total] = await Promise.all([
+      Submission.find(query)
+        .populate("user", "username email avatar")
+        .populate("team", "name")
+        .select("-flagHash")
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+      Submission.countDocuments(query),
+    ]);
+
+    return { submissions, total, page, limit };
   }
 }
 
