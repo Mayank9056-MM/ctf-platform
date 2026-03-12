@@ -540,6 +540,60 @@ class ChallengeService {
       hintIndex,
     };
   }
+
+  /**
+   * Retrieve a list of solves for a challenge, sorted newest-first.
+   * Optional pagination: page and limit.
+   * @param {string} challengeId - The challenge to fetch solves for.
+   * @param {number} [page=1] - The page number to fetch.
+   * @param {number} [limit=20] - The number of solves to fetch per page.
+   * @returns {Promise<{
+   *   solves: ISubmission[],
+   *   total: number,
+   *   page: number,
+   *   limit: number,
+   * }>} - A promise which resolves to an object containing the list of solves, total number of solves, page number and limit.
+   */
+  async getChallengeSolves(challengeId: string, page = 1, limit = 20) {
+    // confirm challenge exists and visible
+
+    page = Math.max(1, page);
+    limit = Math.min(Math.max(1, limit), 100);
+
+    const exists = await Challenge.exists({
+      _id: challengeId,
+      isVisible: true,
+      isActive: true,
+    });
+
+    if (!exists) {
+      throw new ApiError(404, "Challenge not found");
+    }
+
+    const [solves, total] = await Promise.all([
+      Submission.find({
+        challenge: challengeId,
+        isCorrect: true,
+      })
+        .populate("user", "username avatar country")
+        .populate("team", "name avatar")
+        .select(
+          "user team pointsAwarded isFirstBlood createdAt meta.solveTimeSeconds"
+        )
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+      Submission.countDocuments({ challenge: challengeId, isCorrect: true }),
+    ]);
+
+    return {
+      solves,
+      total,
+      page,
+      limit,
+    };
+  }
 }
 
 export const challengeService = new ChallengeService();
