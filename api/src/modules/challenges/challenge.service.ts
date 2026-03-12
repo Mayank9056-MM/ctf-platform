@@ -734,6 +734,13 @@ class ChallengeService {
     return challenge;
   }
 
+  /**
+   * Sets the visibility of a challenge.
+   * @param {string} challengeId The id of the challenge to update.
+   * @param {boolean} isVisible Whether the challenge should be visible.
+   * @param {Types.ObjectId} requesterId The id of the user performing the action.
+   * @returns {Promise<IChallenge>} The updated challenge document.
+   */
   async setVisibility(
     challengeId: string,
     isVisible: boolean,
@@ -766,6 +773,45 @@ class ChallengeService {
     });
 
     return challenge;
+  }
+
+  /**
+   * Soft-deletes a challenge by setting isActive and isVisible to false.
+   * Audit logs the action with the deleting user and the challenge title.
+   * Throws 404 if the challenge is not found.
+   * @param {string} challengeId - The id of the challenge to delete.
+   * @param {Types.ObjectId} requesterId - The id of the user performing the action.
+   * @returns {Promise<void>} - A promise which resolves when the challenge has been deleted.
+   */
+  async deleteChallenge(
+    challengeId: string,
+    requesterId: Types.ObjectId
+  ): Promise<void> {
+    const challenge = await Challenge.findById(challengeId);
+
+    if (!challenge) {
+      throw new ApiError(404, "Challenge not found");
+    }
+
+    challenge.isActive = false;
+    challenge.isVisible = false;
+    await challenge.save({ validateBeforeSave: false });
+
+    await (AuditLog as unknown as IAuditLogModel).record({
+      action: "challenge:delete",
+      outcome: "success",
+      actor: {
+        userId: requesterId,
+        username: null,
+        role: "admin",
+        type: "admin",
+      },
+      target: {
+        id: challenge._id as Types.ObjectId,
+        collection: "challenge",
+        label: challenge.title,
+      },
+    });
   }
 }
 
