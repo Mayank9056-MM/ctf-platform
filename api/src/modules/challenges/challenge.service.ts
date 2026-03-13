@@ -1098,7 +1098,12 @@ class ChallengeService {
     page = 1,
     limit = 50,
     isCorrect?: boolean
-  ) {
+  ): Promise<{
+    submissions: ISubmission[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
     page = Math.max(1, page);
     limit = Math.min(Math.max(1, limit), 100);
 
@@ -1118,6 +1123,51 @@ class ChallengeService {
     ]);
 
     return { submissions, total, page, limit };
+  }
+
+  /**
+   * Retrieves a challenge by its id, only if it is active.
+   * Throws 400 if challengeId is not provided, and 404 if the challenge is not found.
+   * @param {string} challengeId - The id of the challenge to fetch.
+   * @returns {Promise<IChallenge>} - A promise which resolves to the challenge if found, or throws an error if not found.
+   */
+  async getAdminChallengesById(challengeId: string): Promise<IChallenge> {
+    if (!challengeId) {
+      throw new ApiError(400, "Challenge id is required");
+    }
+
+    const challenge = await Challenge.findOne({
+      _id: challengeId,
+      isActive: true,
+    }).lean();
+
+    if (!challenge) {
+      throw new ApiError(404, "Challenge not found");
+    }
+    return challenge;
+  }
+
+  /**
+   * Retrieves the raw flag for a challenge by its id.
+   * Throws 400 if challengeId is not provided, and 404 if the challenge is not found.
+   * @param {string} challengeId - The id of the challenge to fetch the flag for.
+   * @returns {Promise<string>} - A promise which resolves to the flag if found, or throws an error if not found.
+   */
+  async getRawFlag(challengeId: string): Promise<string> {
+    if (!challengeId) {
+      throw new ApiError(400, "Challenge id is required");
+    }
+
+    // Retrieve stored hash — admins verify flag before embedding
+    const challenge = await Challenge.findOne({
+      _id: challengeId,
+      isActive: true,
+    })
+      .select("+flag")
+      .lean();
+
+    if (!challenge) throw new ApiError(404, "Challenge not found");
+    return challenge.flag;
   }
 }
 
