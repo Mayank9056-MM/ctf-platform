@@ -17,6 +17,7 @@ export interface IAttachment {
   size: number;
   mimeType: string;
   uploadedAt: Date;
+  key: string;
 }
 
 export interface IDockerConfig {
@@ -158,6 +159,10 @@ const attachmentSchema = new mongoose.Schema<IAttachment>({
   uploadedAt: {
     type: Date,
     default: Date.now,
+  },
+  key: {
+    type: String,
+    default: null,
   },
 });
 
