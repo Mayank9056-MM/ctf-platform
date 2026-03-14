@@ -304,6 +304,10 @@ const auditLogSchema = new mongoose.Schema<IAuditLog>(
       type: auditActorSchema,
       default: () => ({}),
     },
+    target: {
+      type: auditTargetSchema,
+      default: () => ({}),
+    },
     diff: {
       type: auditDiffSchema,
       default: undefined,
