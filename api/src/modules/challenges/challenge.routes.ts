@@ -4,6 +4,7 @@ import {
   verifyAuth,
 } from "../../middlewares/verifyAuth.middleware";
 import {
+  adminAddAttachment,
   adminAddHint,
   adminCreateChallenge,
   adminDeleteChallenge,
@@ -21,6 +22,10 @@ import {
   purchaseHint,
   submitFlag,
 } from "./challenge.controller";
+import {
+  attachmentUpload,
+  handleUploadError,
+} from "../../middlewares/attachmentUpload.middleware";
 
 const challengeRouter = express.Router();
 
@@ -65,6 +70,14 @@ challengeRouter.route("/admin/:id/hints").post(adminGuard, adminAddHint);
 challengeRouter
   .route("/admin/:id/hints/:hintIndex")
   .delete(adminGuard, adminRemoveHint);
+
+challengeRouter.post(
+  "/admin/:id/attachments",
+  adminGuard,
+  attachmentUpload.single("file"),
+  handleUploadError,
+  adminAddAttachment
+);
 
 challengeRouter
   .route("/admin/:id/attachments/:attachmentId")
