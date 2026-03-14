@@ -1,5 +1,8 @@
 // scoring Utility
 
+import z from "zod";
+import { ApiError } from "./ApiError";
+
 /**
  * Exponential decay: points reduce as more players solve the challenge.
  * max(minPoints, floor(base × (0.5 + 0.5 × e^(−0.05 × (solveCount − 1)))))
@@ -31,4 +34,27 @@ export function calculateDynamicPoints(
  */
 export function validateEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+// Zod helpers
+
+/**
+ * Parse a given body using a zod schema and return the parsed data.
+ * If the parsing fails, an ApiError is thrown with a 400 status code and a message describing the error.
+ * @template T - The type of the parsed data.
+ * @param {z.ZodSchema<T>} schema - The zod schema to use for parsing.
+ * @param {unknown} body - The body to parse.
+ * @returns {T} The parsed data.
+ */
+export function parseBody<T>(schema: z.ZodSchema<T>, body: unknown): T {
+  const result = schema.safeParse(body);
+
+  if (!result.success) {
+    throw new ApiError(
+      400,
+      result.error.message || "Something went wrong while parsing body"
+    );
+  }
+
+  return result.data;
 }
