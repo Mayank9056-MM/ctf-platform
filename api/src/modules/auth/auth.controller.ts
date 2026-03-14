@@ -21,8 +21,6 @@ import jwt from "jsonwebtoken";
 const register = asyncHandler(async (req, res) => {
   const parsed = registerSchema.safeParse(req.body);
 
-  console.log(parsed, "parsed");
-
   if (!parsed.success) {
     throw new ApiError(
       400,
@@ -30,15 +28,15 @@ const register = asyncHandler(async (req, res) => {
     );
   }
 
-  const avatarPath = req.file?.path;
+  const avatarBuffer = req.file?.buffer;
 
-  if (!avatarPath) {
+  if (!avatarBuffer) {
     throw new ApiError(400, "avatar is required");
   }
 
   const user = await authService.registerUser({
     ...parsed.data,
-    avatarPath,
+    avatarBuffer,
   });
 
   return res
@@ -249,14 +247,14 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
     throw new ApiError(401, "Unauthorized");
   }
 
-  const avatarPath = req.file?.path;
+  const avatarBuffer = req.file?.buffer;
 
-  if (!avatarPath) {
+  if (!avatarBuffer) {
     throw new ApiError(400, "Avatar is required");
   }
 
   const updatedUser = await authService.updateUserAvatar(
-    { avatarPath },
+    { avatarBuffer },
     req.user
   );
 

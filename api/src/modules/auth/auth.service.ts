@@ -122,7 +122,7 @@ class AuthService {
     let avatarPublicId: string;
 
     try {
-      const upload = await uploadOnCloudinary(data.avatarPath);
+      const upload = await uploadOnCloudinary(data.avatarBuffer);
 
       if (!upload?.secure_url) {
         throw new ApiError(500, "something went wrong while uploading avatar");
@@ -338,7 +338,7 @@ class AuthService {
     let avatarPublicId;
 
     try {
-      const res = await uploadOnCloudinary(data.avatarPath);
+      const res = await uploadOnCloudinary(data.avatarBuffer);
 
       if (!res?.secure_url) {
         throw new ApiError(500, "Something went wrong while uplading avatar");

@@ -5,7 +5,7 @@ export type RegisterInput = {
   password: string;
   fullName: string;
   provider: "local";
-  avatarPath: string;
+  avatarBuffer: Buffer;
 };
 
 export type OAuthProfileInput = {
@@ -37,7 +37,7 @@ export type updateAccountDetailsInput = {
 };
 
 export type updateUserAvatarInput = {
-  avatarPath: string;
+  avatarBuffer: Buffer;
 };
 
 export type forgotPasswordInput = {

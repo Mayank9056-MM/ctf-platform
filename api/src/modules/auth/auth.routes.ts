@@ -1,5 +1,4 @@
 import express from "express";
-import { upload } from "../../middlewares/multer.middlerware";
 import {
   changeCurrentPassword,
   currentUser,
@@ -15,6 +14,7 @@ import {
 } from "./auth.controller";
 import { verifyAuth } from "../../middlewares/verifyAuth.middleware";
 import { authRateLimiter } from "../../middlewares/ratelimit.middleware";
+import { upload } from "../../middlewares/avatarUpload.middleware";
 
 const authRouter = express.Router();
 

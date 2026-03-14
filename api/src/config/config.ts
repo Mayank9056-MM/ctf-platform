@@ -38,6 +38,13 @@ const envSchema = z.object({
   GOOGLE_CLIENT_ID: z.string(),
   GOOGLE_CLIENT_SECRET: z.string(),
   GOOGLE_REDIRECT_URI: z.string(),
+
+  // Cloudflare S2
+  R2_ACCOUNT_ID: z.string().min(5),
+  R2_ACCESS_KEY_ID: z.string().min(10),
+  R2_SECRET_ACCESS_KEY: z.string().min(10),
+  R2_PUBLIC_DOMAIN: z.url(),
+  R2_BUCKET_NAME: z.string().min(3),
 });
 
 export const config = envSchema.parse(process.env);
