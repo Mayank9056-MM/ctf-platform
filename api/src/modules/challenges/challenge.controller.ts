@@ -23,6 +23,7 @@ import {
   isSupportedImage,
 } from "../../config/imgeFlag";
 import path from "node:path";
+import { parseBody } from "../../utils/helpers";
 
 // helpers\
 
@@ -62,19 +63,9 @@ function urlToKey(publicUrl: string): string {
 // player controllers
 
 const getChallenges = asyncHandler(async (req, res) => {
-  const parsed = challengeFilterSchema.safeParse(req.query);
+  const data = parseBody(challengeFilterSchema, req.query);
 
-  if (!parsed.success) {
-    throw new ApiError(
-      400,
-      parsed.error.message || "Something went wrong while fetching challenges"
-    );
-  }
-
-  const result = await challengeService.getChallenges(
-    parsed.data,
-    req.user!._id
-  );
+  const result = await challengeService.getChallenges(data, req.user!._id);
 
   return res.status(200).json(
     new ApiResponse(
@@ -123,20 +114,13 @@ const submitFlag = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Challenge id is required");
   }
 
-  const parsed = submitFlagSchema.safeParse(req.body);
-
-  if (!parsed.success) {
-    throw new ApiError(
-      400,
-      parsed.error?.message || "Something went wrong while submitting flag"
-    );
-  }
+  const data = parseBody(submitFlagSchema, req.body);
 
   const result = await challengeService.submitFlag({
     userId: req.user!._id,
     teamId: req.user?.teamId,
     challengeId: id,
-    flag: parsed.data.flag,
+    flag: data.flag,
     ip: getIp(req),
     userAgent: req.headers["user-agent"],
   });
@@ -159,18 +143,11 @@ const purchaseHint = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Challenge id is required");
   }
 
-  const parsed = purchaseHintSchema.safeParse(req.body);
-
-  if (!parsed.success) {
-    throw new ApiError(
-      400,
-      parsed.error?.message || "Something went wrong while purchasing hint"
-    );
-  }
+  const data = parseBody(purchaseHintSchema, req.body);
 
   const result = await challengeService.purchaseHint(
     id,
-    parsed.data.hintIndex,
+    data.hintIndex,
     req.user!._id
   );
 
@@ -246,17 +223,10 @@ const adminGetChallenges = asyncHandler(async (req, res) => {
 });
 
 const adminCreateChallenge = asyncHandler(async (req, res) => {
-  const parsed = createChallengeSchema.safeParse(req.body);
-
-  if (!parsed.success) {
-    throw new ApiError(
-      400,
-      parsed.error?.message || "Something went wrong while creating challenge"
-    );
-  }
+  const data = parseBody(createChallengeSchema, req.body);
 
   const challenge = await challengeService.createChallenge({
-    ...parsed.data,
+    ...data,
     authorId: req.user!._id,
   });
 
@@ -276,18 +246,11 @@ const adminUpdateChallenge = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Challenge id is required");
   }
 
-  const parsed = updateChallengeSchema.safeParse(req.body);
-
-  if (!parsed.success) {
-    throw new ApiError(
-      400,
-      parsed.error?.message || "Something went wrong while updating challenge"
-    );
-  }
+  const data = parseBody(updateChallengeSchema, req.body);
 
   const challenge = await challengeService.updateChallenge(
     id,
-    parsed.data,
+    data,
     req.user!._id
   );
 
@@ -367,19 +330,9 @@ const adminAddHint = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Challenge id is required");
   }
 
-  const parsed = addHintSchema.safeParse(req.body);
-  if (!parsed.success) {
-    throw new ApiError(
-      400,
-      parsed.error?.message || "Something went wrong while adding hint"
-    );
-  }
+  const data = parseBody(addHintSchema, req.body);
 
-  const challenge = await challengeService.addHint(
-    id,
-    parsed.data,
-    req.user!._id
-  );
+  const challenge = await challengeService.addHint(id, data, req.user!._id);
 
   if (!challenge) {
     throw new ApiError(400, "Something went wrong while adding hint");

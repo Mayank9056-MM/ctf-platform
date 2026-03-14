@@ -17,16 +17,10 @@ import { verifyGoogleToken } from "../oauth/google.verify";
 import { verifyGithubToken } from "../oauth/github.verify";
 import { cacheService } from "../../services/cacheService";
 import jwt from "jsonwebtoken";
+import { parseBody } from "../../utils/helpers";
 
 const register = asyncHandler(async (req, res) => {
-  const parsed = registerSchema.safeParse(req.body);
-
-  if (!parsed.success) {
-    throw new ApiError(
-      400,
-      parsed.error?.message || "Something went wrong while registering user"
-    );
-  }
+  const data = parseBody(registerSchema, req.body);
 
   const avatarBuffer = req.file?.buffer;
 
@@ -35,7 +29,7 @@ const register = asyncHandler(async (req, res) => {
   }
 
   const user = await authService.registerUser({
-    ...parsed.data,
+    ...data,
     avatarBuffer,
   });
 
@@ -45,17 +39,10 @@ const register = asyncHandler(async (req, res) => {
 });
 
 const login = asyncHandler(async (req, res) => {
-  const parsed = loginSchema.safeParse(req.body);
-
-  if (!parsed.success) {
-    throw new ApiError(
-      400,
-      parsed.error?.message || "Something went wrong while login user"
-    );
-  }
+  const data = parseBody(loginSchema, req.body);
 
   const { accessToken, refreshToken, user } = await authService.loginUser({
-    ...parsed.data,
+    ...data,
   });
 
   const options: CookieOptions = {
@@ -72,16 +59,9 @@ const login = asyncHandler(async (req, res) => {
 });
 
 const oauthLogin = asyncHandler(async (req, res) => {
-  const parsed = OAuthProfileSchema.safeParse(req.body);
+  const data = parseBody(OAuthProfileSchema, req.body);
 
-  if (!parsed.success) {
-    throw new ApiError(
-      400,
-      parsed.error?.message || "Something went wrong while login user"
-    );
-  }
-
-  const { provider, token } = parsed.data;
+  const { provider, token } = data;
 
   let profile;
 
@@ -182,20 +162,13 @@ const logout = asyncHandler(async (req, res) => {
 });
 
 const changeCurrentPassword = asyncHandler(async (req, res) => {
-  const parsed = changeCurrentPasswordSchema.safeParse(req.body);
-
-  if (!parsed.success) {
-    throw new ApiError(
-      400,
-      parsed.error?.message || "Something went wrong while changing password"
-    );
-  }
+  const data = parseBody(changeCurrentPasswordSchema, req.body);
 
   if (!req.user?._id) {
     throw new ApiError(401, "Unauthorized");
   }
 
-  await authService.changePassword({ ...parsed.data, userId: req.user._id });
+  await authService.changePassword({ ...data, userId: req.user._id });
 
   return res
     .status(200)
@@ -213,21 +186,14 @@ const currentUser = asyncHandler(async (req, res) => {
 });
 
 const updateAccountDetails = asyncHandler(async (req, res) => {
-  const parsed = updateAccountDetailsSchema.safeParse(req.body);
-
-  if (!parsed.success) {
-    throw new ApiError(
-      400,
-      parsed.error?.message || "Something went wrong while updating details"
-    );
-  }
+  const data = parseBody(updateAccountDetailsSchema, req.body);
 
   if (!req.user) {
     throw new ApiError(401, "Unauthorized");
   }
 
   const updatedUser = await authService.updateAccountDetails(
-    parsed.data,
+    data,
     req.user._id
   );
 
@@ -270,16 +236,9 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
 });
 
 const forgotPassword = asyncHandler(async (req, res) => {
-  const parsed = forgotPasswordSchema.safeParse(req.body);
+  const data = parseBody(forgotPasswordSchema, req.body);
 
-  if (!parsed.success) {
-    throw new ApiError(
-      400,
-      parsed.error?.message || "Something went wrong while resetting password"
-    );
-  }
-
-  await authService.forgotPassword(parsed.data);
+  await authService.forgotPassword(data);
 
   return res
     .status(200)
@@ -299,17 +258,10 @@ const resetPassword = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Token is required");
   }
 
-  const parsed = resetPasswordSchema.safeParse(req.body);
-
-  if (!parsed.success) {
-    throw new ApiError(
-      400,
-      parsed.error?.message || "Something went wrong while resetting password"
-    );
-  }
+  const data = parseBody(resetPasswordSchema, req.body);
 
   await authService.resetPassword({
-    ...parsed.data,
+    ...data,
     token,
   });
 
