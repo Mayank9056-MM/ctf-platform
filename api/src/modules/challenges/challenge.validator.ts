@@ -252,25 +252,3 @@ export const addHintSchema = z.object({
     .int("Order must be a whole number")
     .min(1, "Order must be at least 1"),
 });
-
-// add attachment (admin)
-
-export const addAttachmentSchema = z.object({
-  name: z
-    .string()
-    .min(1, "Attachment name cannot be empty")
-    .max(100, "Attachment name must be under 100 characters")
-    .trim(),
-
-  url: z.string().url("Attachment URL must be a valid URL"),
-
-  size: z
-    .number()
-    .int("File size must be a whole number")
-    .min(0, "File size cannot be negative"),
-
-  mimeType: z
-    .string()
-    .min(1, "MIME type is required")
-    .max(100, "MIME type must be under 100 characters"),
-});
