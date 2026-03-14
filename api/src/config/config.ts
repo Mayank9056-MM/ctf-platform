@@ -5,11 +5,11 @@ const envSchema = z.object({
     .enum(["development", "production", "test"])
     .default("development"),
   PORT: z.coerce.number().default(3001),
-  CORS_ORIGIN: z.string().url().default("http://localhost:5173"),
+  CORS_ORIGIN: z.url().default("http://localhost:5173"),
 
-  FRONTEND_URL: z.string().url().default("http://localhost:5173"),
+  FRONTEND_URL: z.url().default("http://localhost:5173"),
 
-  MONGODB_URI: z.string().url(),
+  MONGODB_URI: z.url(),
 
   ACCESS_TOKEN_SECRET: z.string().min(32),
   ACCESS_TOKEN_EXPIRY: z.string().default("7d"),
@@ -17,7 +17,7 @@ const envSchema = z.object({
   REFRESH_TOKEN_SECRET: z.string().min(32),
   REFRESH_TOKEN_EXPIRY: z.string().default("30d"),
 
-  REDIS_URL: z.string().url().default("redis://localhost:6379"),
+  REDIS_URL: z.url().default("redis://localhost:6379"),
 
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.coerce.number().optional(),
@@ -39,12 +39,12 @@ const envSchema = z.object({
   GOOGLE_CLIENT_SECRET: z.string(),
   GOOGLE_REDIRECT_URI: z.string(),
 
-  // Cloudflare S2
-  R2_ACCOUNT_ID: z.string().min(5),
-  R2_ACCESS_KEY_ID: z.string().min(10),
-  R2_SECRET_ACCESS_KEY: z.string().min(10),
-  R2_PUBLIC_DOMAIN: z.url(),
-  R2_BUCKET_NAME: z.string().min(3),
+  // aws s3
+  AWS_REGION: z.string().min(5),
+  AWS_ACCESS_KEY_ID: z.string().min(16),
+  AWS_SECRET_ACCESS_KEY: z.string().min(32),
+  AWS_S3_BUCKET_NAME: z.string().min(3),
+  AWS_S3_PUBLIC_DOMAIN: z.url().optional(),
 });
 
 export const config = envSchema.parse(process.env);

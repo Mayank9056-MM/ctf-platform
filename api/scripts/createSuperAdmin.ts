@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import "dotenv/config";
 import User from "../src/models/user.model";
+import { DB_NAME } from "../src/utils/constants";
 
 const MONGO_URI = process.env.MONGODB_URI;
 const email = process.env.SUPER_ADMIN_EMAIL;
@@ -16,7 +17,7 @@ async function main() {
 
   // Connect
   console.log("⏳  Connecting to MongoDB...");
-  await mongoose.connect(MONGO_URI!);
+  await mongoose.connect(MONGO_URI! + "/" + DB_NAME);
   console.log("✅  Connected.\n");
 
   // Guard: prevent duplicate superadmins if one already exists

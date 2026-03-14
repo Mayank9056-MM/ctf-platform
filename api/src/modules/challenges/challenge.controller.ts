@@ -446,7 +446,7 @@ const adminAddAttachment = asyncHandler(async (req, res) => {
     key,
     buffer: file.buffer,
     mimeType: file.mimetype,
-    isPublic: true,
+    isPublic: false,
     metadata: {
       challengeId: id,
       uploadedBy: req.user!._id.toString(),
