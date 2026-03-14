@@ -21,3 +21,14 @@ export function calculateDynamicPoints(
 
   return Math.max(minPoints, decayed);
 }
+
+/**
+ * Validate an email address using a regular expression.
+ * The regex pattern is: /^[^\s@]+@[^\s@]+\.[^\s@]+$
+ * This pattern matches most common email addresses, but may not match all valid email addresses.
+ * @param {string} email - The email address to validate.
+ * @returns {boolean} true if the email address is valid, false otherwise.
+ */
+export function validateEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
