@@ -1,23 +1,14 @@
-// helpers
-
-import User from "../../models/user.model";
 import { ApiError } from "../../utils/ApiError";
 import { ApiResponse } from "../../utils/ApiResponse";
 import { asyncHandler } from "../../utils/asyncHandler";
+import { parseBody } from "../../utils/helpers";
 import { adminService } from "./admin.service";
 import { adminListFilterSchema, createAdminSchema } from "./admin.validators";
 
 const getAdmins = asyncHandler(async (req, res) => {
-  const parsed = adminListFilterSchema.safeParse(req.query);
+  const data = parseBody(adminListFilterSchema, req.query);
 
-  if (!parsed.success) {
-    throw new ApiError(
-      400,
-      parsed.error.message || "Something went wrong while fetching admins"
-    );
-  }
-
-  const result = await adminService.getAdmins(parsed.data);
+  const result = await adminService.getAdmins(data);
 
   if (!result) {
     throw new ApiError(500, "something went wrong while fetching admins");
@@ -36,17 +27,10 @@ const getAdmins = asyncHandler(async (req, res) => {
 });
 
 const createAdmin = asyncHandler(async (req, res) => {
-  const parsed = createAdminSchema.safeParse(req.body);
-
-  if (!parsed.success) {
-    throw new ApiError(
-      400,
-      parsed.error.message || "something went wrong while creating admin"
-    );
-  }
+  const data = parseBody(createAdminSchema, req.body);
 
   const admin = await adminService.createAdmin({
-    ...parsed.data,
+    ...data,
     requesterId: req.user!._id,
     requesterRole: req.user!.role,
     requesterUsername: req.user!.username,

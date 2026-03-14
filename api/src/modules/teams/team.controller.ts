@@ -1,6 +1,7 @@
 import { ApiError } from "../../utils/ApiError";
 import { ApiResponse } from "../../utils/ApiResponse";
 import { asyncHandler } from "../../utils/asyncHandler";
+import { parseBody } from "../../utils/helpers";
 import { teamService } from "./team.service";
 import {
   createTeamSchema,
@@ -11,24 +12,14 @@ import {
 } from "./team.validate";
 
 const createTeam = asyncHandler(async (req, res) => {
-  const parsed = createTeamSchema.safeParse(req.body);
-
-  console.log(parsed, "parsed team");
-  console.log(parsed.error, "parsed error");
-
-  if (!parsed.success) {
-    throw new ApiError(
-      400,
-      parsed.error?.message || "Something went wrong while creating team"
-    );
-  }
+  const data = parseBody(createTeamSchema, req.body);
 
   if (!req.user) {
     throw new ApiError(401, "Unauthorized");
   }
 
   const team = await teamService.createTeam({
-    ...parsed.data,
+    ...data,
     ownerId: req.user._id,
   });
 
@@ -72,17 +63,10 @@ const updateTeam = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Team id is required");
   }
 
-  const parsed = updateTeamSchema.safeParse(req.body);
-
-  if (!parsed.success) {
-    throw new ApiError(
-      400,
-      parsed.error?.message || "Something went wrong while updating team"
-    );
-  }
+  const data = parseBody(updateTeamSchema, req.body);
 
   const team = await teamService.updateTeam({
-    ...parsed.data,
+    ...data,
     teamId,
     requesterId: req.user!._id,
   });
@@ -113,19 +97,9 @@ const generateJoinCode = asyncHandler(async (req, res) => {
 });
 
 const joinTeamByCode = asyncHandler(async (req, res) => {
-  const parsed = joinTeamByCodeSchema.safeParse(req.body);
+  const data = parseBody(joinTeamByCodeSchema, req.body);
 
-  if (!parsed.success) {
-    throw new ApiError(
-      400,
-      parsed.error?.message || "Something went wrong while joining team"
-    );
-  }
-
-  const team = await teamService.joinTeamByCode(
-    req.user!._id,
-    parsed.data.code
-  );
+  const team = await teamService.joinTeamByCode(req.user!._id, data.code);
 
   return res
     .status(200)
@@ -139,22 +113,13 @@ const inviteUser = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Team id is required");
   }
 
-  const parsed = inviteUserSchema.safeParse(req.body);
+  const data = parseBody(inviteUserSchema, req.body);
 
-  if (!parsed.success) {
-    throw new ApiError(
-      400,
-      parsed.error?.message || "Something went wrong while inviting user"
-    );
-  }
-
-  await teamService.inviteUser(id, req.user!._id, parsed.data.username);
+  await teamService.inviteUser(id, req.user!._id, data.username);
 
   return res
     .status(200)
-    .json(
-      new ApiResponse(200, {}, `Invitation sent to ${parsed.data.username}`)
-    );
+    .json(new ApiResponse(200, {}, `Invitation sent to ${data.username}`));
 });
 
 const acceptInvite = asyncHandler(async (req, res) => {
@@ -212,16 +177,9 @@ const kickMember = asyncHandler(async (req, res) => {
 });
 
 const searchTeams = asyncHandler(async (req, res) => {
-  const parsed = searchTeamSchema.safeParse(req.body);
+  const data = parseBody(searchTeamSchema, req.body);
 
-  if (!parsed.success) {
-    throw new ApiError(
-      400,
-      parsed.error.message || "Something went wrong while searching teams"
-    );
-  }
-
-  const result = await teamService.searchTeams(parsed.data);
+  const result = await teamService.searchTeams(data);
 
   return res.status(200).json(
     new ApiResponse(
