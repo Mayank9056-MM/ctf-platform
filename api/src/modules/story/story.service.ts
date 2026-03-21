@@ -765,7 +765,7 @@ class StoryService {
       throw new ApiError(404, "Node not found");
     }
 
-    if (node.type === "choice") {
+    if (node.type !== "choice") {
       throw new ApiError(400, "This node is not a choice node");
     }
 
@@ -829,15 +829,15 @@ class StoryService {
       },
     })
       .populate("user", "username avatar country")
-      .sort({ totalXpEarned: -1, completedAt: -1 })
+      .sort({ totalXpEarned: -1, completedAt: 1 })
       .limit(limit)
       .select(
         "user status totalXpEarned playTimeSeconds completedAt completedNodes"
       )
       .lean();
 
-    if (!entries) {
-      throw new ApiError(404, "Story not found");
+    if (entries.length === 0) {
+      return [];
     }
 
     return entries.map((e, i) => ({
@@ -939,7 +939,7 @@ class StoryService {
       const chapterCount = await StoryChapter.countDocuments({
         story: storyId,
         status: "published",
-        "node.0": { $exists: true },
+        "nodes.0": { $exists: true },
       });
 
       if (chapterCount === 0) {
