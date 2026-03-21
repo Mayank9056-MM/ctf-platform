@@ -1,11 +1,20 @@
 import { Types } from "mongoose";
-import Story, { IStoryNode, StoryChapter } from "../../models/story.model";
+import Story, {
+  IStory,
+  IStoryNode,
+  StoryChapter,
+  StoryNode,
+  StoryStatus,
+} from "../../models/story.model";
 import {
   CompleteNodePayload,
   CompleteNodeResult,
+  CreateStoryPayload,
+  MakeChoicePayload,
   StartStoryPayload,
   StoryFilters,
   StoryProgressView,
+  UpdateStoryPayload,
 } from "./story.types";
 import escapeStringRegexp from "escape-string-regexp";
 import { ApiError } from "../../utils/ApiError";
@@ -660,6 +669,321 @@ class StoryService {
       attempts: 1,
       elapsedSeconds,
     });
+  }
+
+  /**
+   * Notifies the service that a challenge has been solved by a user.
+   * Updates the user's progress in the story, and marks the challenge node as complete.
+   * Does nothing if the challenge is not found, or if the user does not have active progress for the story.
+   * @param challengeId The id of the challenge.
+   * @param userId The id of the user.
+   * @param pointsEarned The points earned for solving the challenge.
+   * @param attempts The number of attempts made to solve the challenge.
+   */
+  async notifyChallengeSolved(
+    challengeId: string,
+    userId: Types.ObjectId,
+    pointsEarned: number,
+    attempts: number
+  ): Promise<void> {
+    // Find all story nodes that wrap this challenge
+    const nodes = await StoryNode.find({
+      challenge: new Types.ObjectId(challengeId),
+    }).lean();
+
+    if (nodes.length === 0) return;
+
+    for (const node of nodes) {
+      const chapter = await StoryChapter.findById(node.chapter);
+
+      if (!chapter) continue;
+
+      // Check if this user has active progress for this story
+      const progress = await UserStoryProgress.findOne({
+        user: userId,
+        story: chapter.story,
+        status: "in_progress",
+      });
+
+      if (!progress) continue;
+
+      // Skip already completed
+      const alreadyDone = progress.completedNodes.some(
+        (n) => n.nodeId.toString() === node._id.toString()
+      );
+
+      if (alreadyDone) continue;
+
+      await this._completeNode({
+        storyId: chapter.story.toString(),
+        chapterId: chapter._id.toString(),
+        nodeId: node._id.toString(),
+        userId,
+        pointsEarned,
+        attempts,
+        elapsedSeconds: 0,
+      });
+    }
+  }
+
+  /**
+   * Makes a choice in a story chapter.
+   * Updates the user's progress in the story, and marks the choice node as complete.
+   * Does nothing if the choice node is not found, or if the user does not have active progress for the story.
+   * @param payload - The payload of the request with the following properties:
+   *   - storyId: The id of the story.
+   *   - chapterId: The id of the chapter.
+   *   - nodeId: The id of the choice node.
+   *   - userId: The id of the user.
+   *   - choiceLabel: The label of the choice made by the user.
+   * @returns A promise that resolves with an object containing the following properties:
+   *   - nodeId: The id of the completed node.
+   *   - xpBonus: The XP bonus of the node.
+   *   - chapterCompleted: Whether the chapter has been completed.
+   *   - storyCompleted: Whether the story has been completed.
+   *   - completionXpBonus: The XP bonus for completing the story.
+   *   - nextNodeId: The id of the next node to complete.
+   *   - nextChapterId: The id of the next chapter to complete.
+   *   - postNarrative: The post-narrative of the completed node.
+   *   - totalXpEarned: The total XP earned by the user in the story.
+   */
+  async makeChoice(payload: MakeChoicePayload): Promise<CompleteNodeResult> {
+    const { storyId, chapterId, nodeId, userId, choiceLabel } = payload;
+
+    const chapter = await StoryChapter.findOne({
+      _id: chapterId,
+      story: storyId,
+    });
+
+    if (!chapter) {
+      throw new ApiError(404, "Chapter not found");
+    }
+
+    const node = chapter.nodes.find((n) => n._id.toString() === nodeId);
+
+    if (!node) {
+      throw new ApiError(404, "Node not found");
+    }
+
+    if (node.type === "choice") {
+      throw new ApiError(400, "This node is not a choice node");
+    }
+
+    const choice = node.choices?.find((c) => c.label === choiceLabel);
+
+    if (!choice) {
+      throw new ApiError(400, `Invalid choice: ${choiceLabel}`);
+    }
+
+    return this._completeNode({
+      storyId,
+      chapterId,
+      nodeId,
+      userId,
+      pointsEarned: 0,
+      attempts: 1,
+      elapsedSeconds: 0,
+      choiceLabel,
+    });
+  }
+
+  /**
+   * Gets the progress of a user in a story.
+   * @param storyId The id of the story.
+   * @param userId The id of the user.
+   * @returns A promise that resolves with a StoryProgressView object or null if the user does not have progress for the story.
+   */
+  async getProgress(
+    storyId: string,
+    userId: Types.ObjectId
+  ): Promise<StoryProgressView | null> {
+    const progress = await UserStoryProgress.findOne({
+      user: userId,
+      story: storyId,
+    }).lean();
+
+    if (!progress) return null;
+
+    return this.buildProgressView(progress._id.toString(), userId);
+  }
+
+  /**
+   * Gets the leaderboard of a story, sorted by total XP earned and then by completion time.
+   * @param storyId The id of the story.
+   * @param limit The number of entries to return.
+   * @returns A promise that resolves with an array of leaderboard entries.
+   * Each entry has the following properties:
+   *   - rank: The rank of the entry.
+   *   - user: The user who made the progress.
+   *   - status: The status of the user's progress (in_progress or completed).
+   *   - totalXpEarned: The total XP earned by the user in the story.
+   *   - playTimeSeconds: The total play time of the user in the story in seconds.
+   *   - completedAt: The timestamp when the user completed the story.
+   *   - nodesCompleted: The number of nodes completed by the user in the story.
+   */
+  async getStoryLeaderBoard(storyId: string, limit = 20) {
+    const entries = await UserStoryProgress.find({
+      story: storyId,
+      status: {
+        $in: ["in_progress", "completed"],
+      },
+    })
+      .populate("user", "username avatar country")
+      .sort({ totalXpEarned: -1, completedAt: -1 })
+      .limit(limit)
+      .select(
+        "user status totalXpEarned playTimeSeconds completedAt completedNodes"
+      )
+      .lean();
+
+    if (!entries) {
+      throw new ApiError(404, "Story not found");
+    }
+
+    return entries.map((e, i) => ({
+      rank: i + 1,
+      user: e.user,
+      status: e.status,
+      totalXpEarned: e.totalXpEarned,
+      playTimeSeconds: e.playTimeSeconds,
+      completedAt: e.completedAt,
+      nodesCompleted: e.completedNodes.length,
+    }));
+  }
+
+  // Admin operations
+
+  /**
+   * Creates a new story in the database.
+   * @param payload The payload object containing the story details.
+   * @returns A promise that resolves with the newly created story object.
+   * @throws {ApiError} If a story with the same title already exists.
+   * @throws {ApiError} If the story creation fails.
+   */
+  async createStory(payload: CreateStoryPayload): Promise<IStory> {
+    const exists = await Story.findOne({
+      title: {
+        $regex: new RegExp(`${escapeStringRegexp(payload.title)}$`, "i"),
+      },
+    });
+
+    if (exists) {
+      throw new ApiError(409, "A story with this title already exists");
+    }
+
+    const story = await Story.create({
+      ...payload,
+      author: payload.authorId,
+    });
+
+    if (!story) {
+      throw new ApiError(500, "Failed to create story");
+    }
+
+    return story;
+  }
+
+  /**
+   * Updates a story in the database.
+   * @param {UpdateStoryPayload} payload - The payload object containing the story details.
+   * @returns {Promise<IStory>} A promise that resolves with the updated story object.
+   * @throws {ApiError} 404 if the story is not found.
+   * @throws {ApiError} 409 if a story with the same title already exists.
+   */
+  async updateStory(payload: UpdateStoryPayload): Promise<IStory> {
+    const { storyId, requesterId: _r, ...rest } = payload;
+
+    const story = await Story.findById(storyId);
+
+    if (!story) {
+      throw new ApiError(404, "Story not found");
+    }
+
+    if (rest.title && rest.title !== story.title) {
+      const dup = await Story.findOne({
+        title: {
+          $regex: new RegExp(`${escapeStringRegexp(rest.title)}$`, "i"),
+          _id: { $ne: storyId },
+        },
+      });
+
+      if (dup) {
+        throw new ApiError(409, "Story title already in use");
+      }
+    }
+
+    Object.assign(story, rest);
+
+    await story.save();
+
+    return story;
+  }
+
+  /**
+   * Sets the status of a story.
+   * @param {string} storyId - The ID of the story to update.
+   * @param {StoryStatus} status - The new status of the story.
+   * @returns {Promise<IStory>} A promise that resolves with the updated story object.
+   * @throws {ApiError} 404 - Story not found.
+   * @throws {ApiError} 400 - Cannot publish a story with no published chapters. Create and publish at least one chapter first.
+   */
+  async setStoryStatus(storyId: string, status: StoryStatus): Promise<IStory> {
+    const story = await Story.findById(storyId);
+
+    if (!story) {
+      throw new ApiError(404, "Story not found");
+    }
+
+    if (status === "published") {
+      // must have at least one chaper with at least one node
+      const chapterCount = await StoryChapter.countDocuments({
+        story: storyId,
+        status: "published",
+        "node.0": { $exists: true },
+      });
+
+      if (chapterCount === 0) {
+        throw new ApiError(
+          400,
+          "Cannot publish a story with no published chapters. Create and publish at least one chapter first"
+        );
+      }
+    }
+
+    story.status = status;
+    await story.save();
+    return story;
+  }
+
+  /**
+   * Deletes a story and all associated chapters and user progress.
+   * @throws {ApiError} 404 - Story not found.
+   * @throws {ApiError} 409 - Cannot delete a story with active users. Archive it instead.
+   */
+  async deleteStory(storyId: string): Promise<void> {
+    const story = await Story.findById(storyId);
+
+    if (!story) {
+      throw new ApiError(404, "Story not found");
+    }
+
+    const progressCount = await UserStoryProgress.countDocuments({
+      story: storyId,
+      status: "in_progress",
+    });
+
+    if (progressCount > 0) {
+      throw new ApiError(
+        409,
+        `${progressCount} user(s) are actively playing this story. Archive it instead.`
+      );
+    }
+
+    await Promise.all([
+      Story.findByIdAndDelete(storyId),
+      StoryChapter.deleteMany({ story: storyId }),
+      UserStoryProgress.deleteMany({ story: storyId }),
+    ]);
   }
 }
 
