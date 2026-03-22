@@ -1,6 +1,7 @@
 import { Types } from "mongoose";
 import Story, {
   IStory,
+  IStoryChapter,
   IStoryNode,
   StoryChapter,
   StoryNode,
@@ -9,16 +10,21 @@ import Story, {
 import {
   CompleteNodePayload,
   CompleteNodeResult,
+  CreateChapterPayload,
+  CreateNodePayload,
   CreateStoryPayload,
   MakeChoicePayload,
   StartStoryPayload,
   StoryFilters,
   StoryProgressView,
+  UpdateChapterPayload,
+  UpdateNodePayload,
   UpdateStoryPayload,
 } from "./story.types";
 import escapeStringRegexp from "escape-string-regexp";
 import { ApiError } from "../../utils/ApiError";
 import UserStoryProgress from "../../models/userProgressStory.model";
+import { promiseAllObject } from "zod/v4/core/util.cjs";
 
 class StoryService {
   // Helpers
@@ -984,6 +990,245 @@ class StoryService {
       StoryChapter.deleteMany({ story: storyId }),
       UserStoryProgress.deleteMany({ story: storyId }),
     ]);
+  }
+
+  // Chapter admin
+
+  /**
+   * Creates a new chapter in the database.
+   * @param {CreateChapterPayload} payload - The payload object containing the chapter details.
+   * @returns {Promise<IStoryChapter>} A promise that resolves with the created chapter object.
+   * @throws {ApiError} 404 - Story not found.
+   * @throws {ApiError} 409 - A chapter with the same order already exists in this story.
+   * @throws {ApiError} 500 - Failed to create chapter.
+   */
+  async createChapter(payload: CreateChapterPayload): Promise<IStoryChapter> {
+    const story = await Story.findById(payload.storyId);
+
+    if (!story) {
+      throw new ApiError(404, "Story not found");
+    }
+
+    // Enforce unique order within a story
+    const orderExists = await StoryChapter.findOne({
+      story: payload.storyId,
+      order: payload.order,
+    });
+
+    if (orderExists) {
+      throw new ApiError(
+        409,
+        `A chapter with order ${payload.order} already exists in this story`
+      );
+    }
+
+    const chapter = await StoryChapter.create({
+      story: payload.storyId,
+      title: payload.title,
+      order: payload.order,
+      openingNarrative: payload.openingNarrative,
+      closingNarrative: payload.closingNarrative,
+      coverImageUrl: payload.coverImageUrl,
+      accentColor: payload.accentColor,
+      estimatedMinutes: payload.estimatedMinutes
+        ? Number(payload.estimatedMinutes)
+        : undefined,
+      unlockAfterChapters:
+        payload.unlockAfterChapters?.map((id) => new Types.ObjectId(id)) ?? [],
+    });
+
+    if (!chapter) {
+      throw new ApiError(500, "Failed to create chapter");
+    }
+
+    // Add to story chapters array
+    await Story.findByIdAndUpdate(payload.storyId, {
+      $push: {
+        chapters: chapter._id,
+      },
+    });
+
+    return chapter;
+  }
+
+  /**
+   * Updates a chapter with the given payload.
+   * @param {UpdateChapterPayload} payload - The chapter data to update.
+   * @returns {Promise<IStoryChapter>} - The updated chapter.
+   * @throws {ApiError} - If the chapter is not found or if the chapter order is already taken.
+   */
+  async updateChapter(payload: UpdateChapterPayload): Promise<IStoryChapter> {
+    const { chapterId, storyId: _s, requesterid: _r, ...rest } = payload;
+
+    const chapter = await StoryChapter.findById(chapterId);
+
+    if (!chapter) {
+      throw new ApiError(404, "Chapter not found");
+    }
+
+    if (rest.order !== undefined && rest.order !== chapter.order) {
+      const orderExists = await StoryChapter.findOne({
+        story: chapter.story,
+        order: rest.order,
+        _id: {
+          $ne: chapterId,
+        },
+      });
+
+      if (orderExists) {
+        throw new ApiError(409, `Chapter order ${rest.order} is already taken`);
+      }
+    }
+
+    Object.assign(chapter, rest);
+
+    await chapter.save();
+    return chapter;
+  }
+
+  /**
+   * Deletes a chapter and removes it from the story's chapters array.
+   * @throws {ApiError} 404 - Chapter not found.
+   */
+  async deleteChapter(chapterId: string, storyId: string): Promise<void> {
+    const chapter = await StoryChapter.findOne({
+      _id: chapterId,
+      story: storyId,
+    });
+
+    if (!chapter) {
+      throw new ApiError(404, "Chapter not found");
+    }
+
+    await Promise.all([
+      StoryChapter.findByIdAndDelete(chapterId),
+      Story.findByIdAndUpdate(storyId, {
+        $pull: {
+          chapters: chapter._id,
+        },
+      }),
+    ]);
+  }
+
+  // Node admin
+
+  /**
+   * Creates a new node in the database.
+   * @param {CreateNodePayload} payload - The node data to create.
+   * @returns {Promise<IStoryChapter>} - The updated chapter containing the new node.
+   * @throws {ApiError} 404 - Chapter not found.
+   * @throws {ApiError} 409 - A node with the same order already exists in this chapter.
+   */
+  async createNode(payload: CreateNodePayload): Promise<IStoryChapter> {
+    const chapter = await StoryChapter.findOne({
+      _id: payload.chapterId,
+      story: payload.storyId,
+    });
+
+    if (!chapter) {
+      throw new ApiError(404, "Chapter not found");
+    }
+
+    const orderExists = chapter.nodes.some((n) => n.order === payload.order);
+
+    if (orderExists) {
+      throw new ApiError(
+        409,
+        `A node with order ${payload.order} already exists in this chapter`
+      );
+    }
+
+    const newNode = {
+      chapter: chapter._id,
+      type: payload.type,
+      order: payload.order,
+      challenge: payload.challengeId
+        ? new Types.ObjectId(payload.challengeId)
+        : null,
+      preNarrative: payload.preNarrative,
+      postNarrative: payload.postNarrative,
+      characterId: payload.characterId,
+      unlockAfter:
+        payload.unlockAfter?.map((id) => new Types.ObjectId(id)) ?? [],
+      isOptional: payload.isOptional ?? false,
+      xpBonus: payload.xpBonus ?? 0,
+      content: payload.content,
+      choices:
+        payload.choices?.map((c) => ({
+          ...c,
+          unlocksNode: new Types.ObjectId(c.unlocksNode),
+        })) ?? [],
+    };
+
+    chapter.nodes.push(newNode as never);
+    await chapter.save({ validateBeforeSave: false });
+
+    return chapter;
+  }
+
+  /**
+   * Updates a node in a story chapter with the given payload.
+   * @param {UpdateNodePayload} payload - The node data to update.
+   * @returns {Promise<IStoryChapter>} - The updated chapter containing the updated node.
+   * @throws {ApiError} 404 - Chapter not found.
+   * @throws {ApiError} 404 - Node not found.
+   * @throws {ApiError} 409 - A node with the same order already exists in this chapter.
+   */
+  async updateNode(payload: UpdateNodePayload): Promise<IStoryChapter> {
+    const { nodeId, chapterId, requesterId: _r, ...rest } = payload;
+
+    const chapter = await StoryChapter.findById(chapterId);
+
+    if (!chapter) {
+      throw new ApiError(404, "Chapter not found");
+    }
+
+    const nodeIdx = chapter.nodes.findIndex((n) => n._id.toString() === nodeId);
+
+    if (nodeIdx === -1) {
+      throw new ApiError(404, "Node not found");
+    }
+
+    if (rest.order !== undefined) {
+      const orderTaken = chapter.nodes.some(
+        (n, i) => i !== nodeIdx && n.order === rest.order
+      );
+
+      if (orderTaken) {
+        throw new ApiError(409, `Node order ${rest.order} is already taken`);
+      }
+    }
+
+    Object.assign(chapter.nodes[nodeIdx], rest);
+
+    await chapter.save({ validateBeforeSave: false });
+
+    return chapter;
+  }
+
+  /**
+   * Deletes a node from the database.
+   * @param {string} nodeId - The id of the node to delete.
+   * @param {string} chapterId - The id of the chapter that the node belongs to.
+   * @returns {Promise<IStoryChapter>} - The updated chapter with the node deleted.
+   * @throws {ApiError} 404 - Chapter not found.
+   * @throws {ApiError} 404 - Node not found.
+   */
+  async deleteNode(nodeId: string, chapterId: string): Promise<IStoryChapter> {
+    const chapter = await StoryChapter.findById(chapterId);
+    if (!chapter) {
+      throw new ApiError(404, "Chapter not found");
+    }
+
+    const idx = chapter.nodes.findIndex((n) => n._id.toString() === nodeId);
+
+    if (idx === -1) {
+      throw new ApiError(404, "Node not found");
+    }
+    chapter.nodes.splice(idx, 1);
+    await chapter.save({ validateBeforeSave: false });
+
+    return chapter;
   }
 }
 
