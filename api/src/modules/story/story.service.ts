@@ -1,19 +1,21 @@
-import { Types } from "mongoose";
+import mongoose, { Types, ClientSession } from "mongoose";
 import Story, {
   IStory,
   IStoryChapter,
   IStoryNode,
   StoryChapter,
-  StoryNode,
   StoryStatus,
 } from "../../models/story.model";
+import { ApiError } from "../../utils/ApiError";
 import {
-  CompleteNodePayload,
-  CompleteNodeResult,
+  AdvanceNodePayload,
+  CommitNodePayload,
   CreateChapterPayload,
   CreateNodePayload,
   CreateStoryPayload,
+  GraphValidationResult,
   MakeChoicePayload,
+  NodeCompleteResult,
   StartStoryPayload,
   StoryFilters,
   StoryProgressView,
@@ -22,368 +24,118 @@ import {
   UpdateStoryPayload,
 } from "./story.types";
 import escapeStringRegexp from "escape-string-regexp";
-import { ApiError } from "../../utils/ApiError";
-import UserStoryProgress from "../../models/userProgressStory.model";
-import { promiseAllObject } from "zod/v4/core/util.cjs";
+import UserStoryProgress, {
+  IUserStoryProgress,
+} from "../../models/userProgressStory.model";
+import Submission from "../../models/submission.model";
+import logger from "../../utils/logger";
+import User from "../../models/user.model";
+
+function requireNode(chapter: IStoryChapter, nodeId: string): IStoryNode {
+  const node = chapter.nodes.find((n) => n._id.toString() === nodeId);
+  if (!node) throw new ApiError(404, `Node ${nodeId} not found in chapter`);
+  return node;
+}
+
+function collectBranch(
+  nodes: IStoryNode[],
+  startNodeId: string,
+  chosenChoiceLabel?: string
+): Set<string> {
+  const nodeMap = new Map(nodes.map((n) => [n._id.toString(), n]));
+  const visited = new Set<string>();
+  const queue = [startNodeId];
+
+  while (queue.length > 0) {
+    const id = queue.shift()!;
+    if (visited.has(id)) continue;
+    visited.add(id);
+
+    const node = nodeMap.get(id);
+    if (!node) continue;
+
+    if (node.type === "choice" && node.choices.length > 0) {
+      // Follow the chosen path only if this is the choice node;
+      // for other choice nodes downstream, follow all (they'll be traversed later)
+      for (const c of node.choices) {
+        const nextId = c.targetNode.toString();
+        if (!visited.has(nextId)) queue.push(nextId);
+      }
+    } else if (node.nextNode) {
+      const nextId = node.nextNode.toString();
+      if (!visited.has(nextId)) queue.push(nextId);
+    }
+  }
+
+  return visited;
+}
+
+function computeBypassedNodes(
+  nodes: IStoryNode[],
+  choiceNode: IStoryNode,
+  chosenLabel: string
+): string[] {
+  const chosen = choiceNode.choices.find((c) => c.label === chosenLabel);
+  if (!chosen) return [];
+
+  const chosenReachable = collectBranch(nodes, chosen.targetNode.toString());
+
+  const bypassed: string[] = [];
+  for (const c of choiceNode.choices) {
+    if (c.label === chosenLabel) continue;
+    const unchosen = collectBranch(nodes, c.targetNode.toString());
+    for (const id of unchosen) {
+      if (!chosenReachable.has(id)) {
+        bypassed.push(id);
+      }
+    }
+  }
+
+  return bypassed;
+}
+
+/**
+ * Checks if all required nodes in a chapter have been completed.
+ *
+ * Required nodes are those that are not optional and have not been bypassed.
+ * A node is considered completed if its id is present in the completedNodeIds set.
+ * A node is considered bypassed if its id is present in the bypassedNodeIds set.
+ * @returns {boolean} True if the chapter is complete, false otherwise.
+ */
+function isChapterComplete(
+  nodes: IStoryNode[],
+  completedNodeIds: Set<string>,
+  bypassedNodeIds: Set<string>
+): boolean {
+  const required = nodes.filter(
+    (n) => !n.isOptional && !bypassedNodeIds.has(n._id.toString())
+  );
+  return required.every((n) => completedNodeIds.has(n._id.toString()));
+}
+
+// Service
 
 class StoryService {
-  // Helpers
-
   /**
-   * Builds a StoryProgressView object from a UserStoryProgress document.
-   * @param progressId The id of the UserStoryProgress document.
-   * @param _userId The id of the user who owns the progress.
-   * @returns A StoryProgressView object with the following properties:
-   *   - storyId: The id of the story.
-   *   - status: The status of the story progress (in_progress, completed, etc.).
-   *   - currentChapterId: The id of the current chapter.
-   *   - currentNodeId: The id of the current node.
-   *   - completedNodeIds: An array of completed node ids.
-   *   - completedChapterIds: An array of completed chapter ids.
-   *   - totalXpEarned: The total XP earned.
-   *   - playTimeSeconds: The total play time in seconds.
-   *   - playTimeFormatted: The total play time formatted as "Xh Ym".
-   *   - unlockedNodeIds: An array of unlocked node ids.
-   */
-  private async buildProgressView(
-    progressId: string,
-    _userId: Types.ObjectId
-  ): Promise<StoryProgressView> {
-    const progress = await UserStoryProgress.findById(progressId).lean();
-
-    if (!progress) {
-      throw new ApiError(404, "Progress not found");
-    }
-
-    const completedNodeIds = new Set(
-      progress.completedNodes.map((n) => n.nodeId.toString())
-    );
-
-    // Load current chapters to compute unlocked nodes
-    let unlockedNodeIds: string[] = [];
-
-    if (progress.currentChapterId) {
-      const chapter = await StoryChapter.findById(
-        progress.currentChapterId
-      ).lean();
-
-      if (chapter) {
-        unlockedNodeIds = this.computeUnlockedNodes(
-          chapter.nodes,
-          completedNodeIds
-        );
-      }
-    }
-
-    const h = Math.floor(progress.playTimeSeconds / 3600);
-    const m = Math.floor((progress.playTimeSeconds % 3600) / 60);
-    const playTimeFormatted = h > 0 ? `${h}h ${m}m` : `${m}m`;
-
-    return {
-      storyId: progress.story.toString(),
-      status: progress.status,
-      currentChapterId: progress.currentChapterId?.toString(),
-      currentNodeId: progress.currentNodeId?.toString(),
-      completedNodeIds: [...completedNodeIds],
-      completedChapterIds: progress.completedChapters.map((c) =>
-        c.chapterId.toString()
-      ),
-      totalXpEarned: progress.totalXpEarned,
-      playTimeSeconds: progress.playTimeSeconds,
-      playTimeFormatted,
-      unlockedNodeIds,
-    };
-  }
-
-  /**
-   * Compute the list of unlocked nodes given a list of nodes and a set of completed node ids.
-   * A node is considered unlocked if its unlockAfter list is empty or if all the prerequisite nodes are in the completed node ids set.
-   * @returns An array of unlocked node ids.
-   */
-  private computeUnlockedNodes(
-    nodes: IStoryNode[],
-    completedNodeIds: Set<string>
-  ): string[] {
-    const completedNodeIdSet = new Set(completedNodeIds);
-    return nodes
-      .filter((node) => {
-        if (node.unlockAfter.length === 0) {
-          return true;
-        }
-        return node.unlockAfter.every((prereq) =>
-          completedNodeIdSet.has(prereq.toString())
-        );
-      })
-      .map((node) => node._id.toString());
-  }
-
-  /**
-   * Checks if a chapter is complete by checking if all the required nodes in the chapter
-   * have been completed.
-   * @param nodes - The list of nodes in the chapter.
-   * @param completedNodeIds - A set of completed node ids.
-   * @returns true if the chapter is complete, false otherwise.
-   */
-  private isChapterComplete(
-    nodes: IStoryNode[],
-    completedNodeIds: Set<string>
-  ): boolean {
-    const completedNodeIdSet = new Set(completedNodeIds);
-
-    return nodes
-      .filter((n) => !n.isOptional && n.type === "challenge")
-      .every((n) => completedNodeIdSet.has(n._id.toString()));
-  }
-
-  /**
-   * Completes a node in a story.
-   * @param payload - The payload of the request with the following properties:
-   *   - storyId: The id of the story.
-   *   - chapterId: The id of the chapter.
-   *   - nodeId: The id of the node to complete.
-   *   - userId: The id of the user.
-   *   - pointsEarned: The points earned for completing the node (default 0).
-   *   - attempts: The number of attempts made to complete the node (default 1).
-   *   - elapsedSeconds: The time taken to complete the node in seconds (default 0).
-   *   - choiceLabel: The label of the choice made by the user (optional).
-   * @returns A promise that resolves with an object containing the following properties:
-   *   - nodeId: The id of the completed node.
-   *   - xpBonus: The XP bonus of the node.
-   *   - chapterCompleted: Whether the chapter has been completed.
-   *   - storyCompleted: Whether the story has been completed.
-   *   - completionXpBonus: The XP bonus for completing the story.
-   *   - nextNodeId: The id of the next node to complete.
-   *   - nextChapterId: The id of the next chapter to complete.
-   *   - postNarrative: The post-narrative of the completed node.
-   *   - totalXpEarned: The total XP earned by the user in the story.
-   */
-  private async _completeNode(
-    payload: CompleteNodePayload & { choiceLabel?: string }
-  ): Promise<CompleteNodeResult> {
-    const {
-      storyId,
-      chapterId,
-      nodeId,
-      userId,
-      pointsEarned = 0,
-      attempts = 1,
-      elapsedSeconds = 0,
-      choiceLabel,
-    } = payload;
-
-    const [story, chapter, progress] = await Promise.all([
-      Story.findById(storyId)
-        .select("completionXpBonus completionCount")
-        .lean(),
-      StoryChapter.findOne({ _id: chapterId, story: storyId }),
-      UserStoryProgress.findOne({ user: userId, story: storyId }),
-    ]);
-
-    if (!story) {
-      throw new ApiError(404, "Story not found");
-    }
-
-    if (!chapter) {
-      throw new ApiError(404, "Chapter not found");
-    }
-
-    if (!progress) {
-      throw new ApiError(
-        400,
-        "You must start the story before completing nodes."
-      );
-    }
-
-    const node = chapter.nodes.find((n) => n._id.toString() === nodeId);
-
-    if (!node) {
-      throw new ApiError(404, "Node not found");
-    }
-
-    // Idempotency gaurd - already completed
-    const alreadyDone = progress.completedNodes.some(
-      (n) => n.nodeId.toString() === nodeId
-    );
-
-    if (alreadyDone) {
-      return {
-        nodeId,
-        xpBonus: node.xpBonus,
-        chapterCompleted: progress.completedChapters.some(
-          (c) => c.chapterId.toString() === chapterId
-        ),
-        storyCompleted: progress.status === "completed",
-        completionXpBonus: 0,
-        totalXpEarned: progress.totalXpEarned,
-        postNarrative: node.postNarrative ?? undefined,
-      };
-    }
-
-    // Record the node completion
-    progress.completedNodes.push({
-      nodeId: new Types.ObjectId(nodeId),
-      challengeId: node.challenge ?? undefined,
-      completedAt: new Date(),
-      pointsEarned,
-      xpBonus: node.xpBonus,
-      attempts,
-    });
-
-    progress.totalXpEarned += pointsEarned + node.xpBonus;
-    progress.playTimeSeconds += elapsedSeconds;
-
-    if (choiceLabel) {
-      progress.choicesMade.push({
-        nodeId: new Types.ObjectId(nodeId),
-        choiceLabel,
-        madeAt: new Date(),
-      });
-    }
-
-    const completedNodeIds = new Set(
-      progress.completedNodes.map((n) => n.nodeId.toString())
-    );
-
-    // Check chapter completion
-    const chapterCompleted = this.isChapterComplete(
-      chapter.nodes,
-      completedNodeIds
-    );
-
-    let chapterJustCompleted = false;
-    // Check story completion - all published chapters complete
-    let storyCompleted = false;
-    let completionXpBonus = 0;
-
-    if (
-      chapterCompleted &&
-      !progress.completedChapters.some(
-        (c) => c.chapterId.toString() === chapterId
-      )
-    ) {
-      progress.completedChapters.push({
-        chapterId: new Types.ObjectId(chapterId),
-        completedAt: new Date(),
-      });
-      chapterJustCompleted = true;
-
-      if (chapterJustCompleted) {
-        const allPublishedChapters = await StoryChapter.find({
-          story: storyId,
-          status: "published",
-        })
-          .select("_id")
-          .lean();
-
-        const allChapterDone = allPublishedChapters.every((c) =>
-          progress.completedChapters.some(
-            (pc) => pc.chapterId.toString() === c._id.toString()
-          )
-        );
-
-        if (allChapterDone && progress.status !== "completed") {
-          storyCompleted = true;
-          completionXpBonus = story.completionXpBonus;
-          progress.status = "completed";
-          progress.completedAt = new Date();
-          progress.totalXpEarned += completionXpBonus;
-
-          // Increment story completionCount
-          await Story.findByIdAndUpdate(storyId, {
-            $inc: { completionCount: 1 },
-          });
-        }
-      }
-    }
-
-    // Advance currentNodeId to next unlocked node
-    const nextNode = chapter.nodes
-      .filter((n) => !completedNodeIds.has(n._id.toString()))
-      .filter((n) =>
-        n.unlockAfter.every((prereq) => completedNodeIds.has(prereq.toString()))
-      )
-      .sort((a, b) => a.order - b.order)[0];
-
-    progress.currentNodeId = nextNode?._id ?? undefined;
-
-    if (!nextNode && chapterJustCompleted) {
-      // Advance to next chapter
-      const nextChapter = await StoryChapter.findOne({
-        story: storyId,
-        status: "published",
-        order: {
-          $gt: chapter.order,
-        },
-      })
-        .sort({ order: 1 })
-        .lean();
-
-      if (nextChapter) {
-        progress.currentChapterId = nextChapter._id;
-
-        const firstNextNode = nextChapter.nodes.sort(
-          (a, b) => a.order - b.order
-        )[0];
-
-        progress.currentNodeId = firstNextNode._id ?? undefined;
-      }
-    }
-
-    await progress.save({ validateBeforeSave: false });
-
-    return {
-      nodeId,
-      xpBonus: node.xpBonus,
-      chapterCompleted: chapterJustCompleted,
-      storyCompleted,
-      completionXpBonus,
-      nextNodeId: progress.currentNodeId?.toString(),
-      nextChapterId: progress.currentChapterId?.toString(),
-      postNarrative: node.postNarrative ?? undefined,
-      totalXpEarned: progress.totalXpEarned,
-    };
-  }
-
-  // services
-
-  /**
-   * Fetches a list of stories, with optional filters and pagination.
-   *
-   * @param filters - A set of filters to apply to the query.
-   * @param userId - The ID of the user whose progress should be annotated.
-   *
-   * @returns An object containing the list of stories, the total number of stories,
-   *  the current page number, and the limit per page.
-   *
-   * @throws {ApiError} 404 - If no stories are found.
+   * Retrieve a list of stories based on the provided filters.
+   * @param {StoryFilters} filters - The filters to apply to the query.
+   * @param {Types.ObjectId} [userId] - The id of the user to retrieve progress for.
+   * @returns {Promise<object>} A promise that resolves to an object containing the stories, total count, and pagination information.
    */
   async getStories(filters: StoryFilters, userId?: Types.ObjectId) {
     const { status, difficulty, tags, search, page, limit } = filters;
 
     const query: Record<string, unknown> = {};
-
-    // Non-admin callers only see published stories
     if (status) {
       query.status = status;
-    } else if (!userId) {
+    } else {
       query.status = "published";
     }
-
-    if (difficulty) {
-      query.difficulty = difficulty;
-    }
-
-    if (tags?.length) {
-      query.tags = { $in: tags };
-    }
-
+    if (difficulty) query.difficulty = difficulty;
+    if (tags?.length) query.tags = { $in: tags };
     if (search) {
       query.$or = [
-        {
-          tags: {
-            $elemMatch: { $regex: escapeStringRegexp(search), $options: "i" },
-          },
-        },
+        { title: { $regex: escapeStringRegexp(search), $options: "i" } },
         { tags: { $regex: escapeStringRegexp(search), $options: "i" } },
       ];
     }
@@ -401,23 +153,14 @@ class StoryService {
       Story.countDocuments(query),
     ]);
 
-    if (!total) {
-      throw new ApiError(404, "No stories found");
-    }
-
-    // Annotate with user's progress
     let progressMap = new Map<string, string>();
-
     if (userId) {
       const progresses = await UserStoryProgress.find({
         user: userId,
-        story: {
-          $in: stories.map((s) => s._id),
-        },
+        story: { $in: stories.map((s) => s._id) },
       })
         .select("story status")
         .lean();
-
       progressMap = new Map(
         progresses.map((p) => [p.story.toString(), p.status])
       );
@@ -435,35 +178,31 @@ class StoryService {
   }
 
   /**
-   * Retrieve a story by its ID or slug. If `adminView` is set to `true`,
-   * all stories are returned, regardless of their status. If `userId` is
-   * provided, the user's progress on the story is returned.
+   * Retrieves a story by its ID or slug, with an optional user ID to
+   * include progress information.
    *
-   * @param idOrSlug The ID or slug of the story to retrieve.
-   * @param userId The ID of the user whose progress to retrieve.
-   * @param adminView Whether to return all stories, regardless of their status.
-   * @returns The story, its chapters, and the user's progress.
+   * @param {string} idOrSlug - The ID or slug of the story to retrieve.
+   * @param {Types.ObjectId} [userId] - The ID of the user to retrieve progress for.
+   * @param {boolean} [adminView=false] - If true, the story will be retrieved even if it is not published.
+   *
+   * @returns {Promise<object>} A promise that resolves to an object containing the story, chapters, and user progress information.
    */
   async getStoryDetail(
     idOrSlug: string,
     userId?: Types.ObjectId,
     adminView = false
   ) {
-    const query = Types.ObjectId.isValid(idOrSlug)
+    const query: Record<string, unknown> = Types.ObjectId.isValid(idOrSlug)
       ? { _id: idOrSlug }
       : { slug: idOrSlug };
 
-    if (!adminView) {
-      (query as Record<string, unknown>).status = "published";
-    }
+    if (!adminView) query.status = "published";
 
     const story = await Story.findOne(query)
       .populate("author", "username avatar")
       .lean();
 
-    if (!story) {
-      throw new ApiError(404, "Story not found");
-    }
+    if (!story) throw new ApiError(404, "Story not found");
 
     const chaptersQuery: Record<string, unknown> = {
       story: story._id,
@@ -474,9 +213,9 @@ class StoryService {
       .sort({ order: 1 })
       .lean();
 
-    // Fetch user progress
-    let progress = null;
+    let progress: IUserStoryProgress | null = null;
     let completedNodeIds = new Set<string>();
+    let bypassedNodeIds = new Set<string>();
 
     if (userId) {
       progress = await UserStoryProgress.findOne({
@@ -487,37 +226,53 @@ class StoryService {
       completedNodeIds = new Set(
         progress?.completedNodes.map((n) => n.nodeId.toString()) ?? []
       );
+      bypassedNodeIds = new Set(
+        progress?.bypassedNodeIds.map((id) => id.toString()) ?? []
+      );
     }
 
-    // Build chapters with node annotations
     const enrichedChapters = chapters.map((chapter) => {
-      const unlockedNodeIds = this.computeUnlockedNodes(
-        chapter.nodes,
-        completedNodeIds
-      );
-
       const chapterCompleted =
         progress?.completedChapters.some(
           (c) => c.chapterId.toString() === chapter._id.toString()
         ) ?? false;
 
-      // For player view: mask challenge details on locked nodes
+      const chapterUnlocked =
+        adminView ||
+        chapter.unlockAfterChapters.length === 0 ||
+        chapter.unlockAfterChapters.every((id) =>
+          progress?.completedChapters.some(
+            (c) => c.chapterId.toString() === id.toString()
+          )
+        );
+
       const nodes = chapter.nodes
         .sort((a, b) => a.order - b.order)
         .map((node) => {
-          const isCompleted = completedNodeIds.has(node._id.toString());
-          const isUnlocked =
-            adminView || unlockedNodeIds.includes(node._id.toString());
+          const nodeId = node._id.toString();
+          const isCompleted = completedNodeIds.has(nodeId);
+          const isBypassed = bypassedNodeIds.has(nodeId);
 
-          if (!isUnlocked && !adminView) {
-            // Locked node - reveal only minimal info
+          // A node is unlocked if all its unlockAfter prereqs are done
+          const prereqsMet =
+            node.unlockAfter.length === 0 ||
+            node.unlockAfter.every((prereqId) =>
+              completedNodeIds.has(prereqId.toString())
+            );
+
+          const isCurrentNode = progress?.currentNodeId?.toString() === nodeId;
+
+          if (!adminView && !prereqsMet && !isCompleted && !isBypassed) {
             return {
               _id: node._id,
               type: node.type,
               order: node.order,
               isOptional: node.isOptional,
+              isEntryPoint: node.isEntryPoint,
               isLocked: true,
               isCompleted: false,
+              isBypassed: false,
+              isCurrent: false,
             };
           }
 
@@ -525,8 +280,8 @@ class StoryService {
             ...node,
             isLocked: false,
             isCompleted,
-            isUnlocked,
-            // Strip postNarrative from uncompleted nodes to avoid spoilers
+            isBypassed,
+            isCurrent: isCurrentNode,
             postNarrative: isCompleted ? node.postNarrative : null,
           };
         });
@@ -535,14 +290,7 @@ class StoryService {
         ...chapter,
         nodes,
         isCompleted: chapterCompleted,
-        isUnlocked:
-          adminView ||
-          chapter.unlockAfterChapters.length === 0 ||
-          chapter.unlockAfterChapters.every((id) =>
-            progress?.completedChapters.some(
-              (c) => c.chapterId.toString() === id.toString()
-            )
-          ),
+        isUnlocked: chapterUnlocked,
       };
     });
 
@@ -553,9 +301,11 @@ class StoryService {
         ? {
             status: progress.status,
             totalXpEarned: progress.totalXpEarned,
-            completedNodeIds: progress.completedNodes.map((c) =>
-              c.nodeId.toString()
-            ),
+            currentNodeId: progress.currentNodeId?.toString(),
+            currentChapterId: progress.currentChapterId?.toString(),
+            completedNodeIds: [...completedNodeIds],
+            bypassedNodeIds: [...bypassedNodeIds],
+            activePath: progress.activePath.map((id) => id.toString()),
             playTimeSeconds: progress.playTimeSeconds,
           }
         : null,
@@ -563,31 +313,32 @@ class StoryService {
   }
 
   /**
-   * Start a new story for a user.
-   * @param payload The user ID and story ID to start.
-   * @returns The initial story progress view.
-   * @throws {ApiError} If the story is not found or if the user already started the story.
+   * Start a new story progress session for a user.
+   * If the user already has a progress session for this story, it will be returned.
+   * Otherwise, a new progress session will be created.
+   *
+   * @param payload - The payload containing the storyId and userId.
+   * @returns A Promise resolving to a StoryProgressView object.
+   * @throws ApiError - If the story is not found, or if there's an error creating the progress session.
    */
   async startStory(payload: StartStoryPayload): Promise<StoryProgressView> {
     const { storyId, userId } = payload;
 
-    const story = await Story.findOne({ _id: storyId, status: "published" });
+    const story = await Story.findOne({
+      _id: storyId,
+      status: "published",
+    }).lean();
+    if (!story) throw new ApiError(404, "Story not found");
 
-    if (!story) {
-      throw new ApiError(404, "Story not found");
-    }
-
-    // Idempotent
+    // Idempotent — return existing progress
     const existing = await UserStoryProgress.findOne({
       user: userId,
       story: storyId,
-    });
-
+    }).lean();
     if (existing) {
-      return this.buildProgressView(existing._id.toString(), userId);
+      return this.buildProgressView(existing);
     }
 
-    // Find the first chapter and fist node
     const firstChapter = await StoryChapter.findOne({
       story: storyId,
       status: "published",
@@ -597,94 +348,196 @@ class StoryService {
     if (!firstChapter) {
       throw new ApiError(
         400,
-        "This story has no published chapter yet. Check back soon."
+        "This story has no published chapters. Check back soon."
       );
     }
 
-    if (!firstChapter.nodes.length) {
-      throw new ApiError(400, "First chapter has no nodes");
+    const entryNode = firstChapter.nodes.find((n) => n.isEntryPoint);
+    if (!entryNode) {
+      throw new ApiError(
+        500,
+        "Chapter has no entry point node. Contact an admin."
+      );
     }
 
-    const firstNode = firstChapter.nodes.sort((a, b) => a.order - b.order)[0];
+    const session = await mongoose.startSession();
 
-    const progress = await UserStoryProgress.create({
-      user: userId,
-      story: storyId,
-      status: "in_progress",
-      currentChapterId: firstChapter._id,
-      currentNodeId: firstNode._id ?? null,
-    });
+    try {
+      session.startTransaction();
 
-    return this.buildProgressView(progress._id.toString(), userId);
+      const progress = await UserStoryProgress.create(
+        [
+          {
+            user: userId,
+            story: storyId,
+            status: "in_progress",
+            currentChapterId: firstChapter._id,
+            currentNodeId: entryNode._id,
+            activePath: [entryNode._id],
+          },
+        ],
+        { session }
+      );
+
+      await session.commitTransaction();
+      return this.buildProgressView(progress[0]);
+    } catch (err: unknown) {
+      await session.abortTransaction();
+      // If duplicate key (race condition) — return existing
+      if ((err as { code?: number }).code === 11000) {
+        const existing = await UserStoryProgress.findOne({
+          user: userId,
+          story: storyId,
+        }).lean();
+        if (existing) return this.buildProgressView(existing);
+      }
+      throw err;
+    } finally {
+      session.endSession();
+    }
   }
 
   /**
-   * Advances the user's progress in a story by completing a node.
-   * If the node is not found, a 404 error is thrown.
-   * If the node is a challenge, a 400 error is thrown, as challenge nodes are completed
-   * via flag submission, not this endpoint.
-   * @param payload - An object containing the following properties:
-   *   - storyId: The id of the story.
-   *   - chapterId: The id of the chapter.
-   *   - nodeId: The id of the node to complete.
-   *   - userId: The id of the user.
-   *   - pointsEarned: The points earned for completing the node (default 0).
-   *   - attempts: The number of attempts made to complete the node (default 1).
-   *   - elapsedSeconds: The time taken to complete the node in seconds (default 0).
-   * @returns A promise that resolves with an object containing the following properties:
-   *   - nodeId: The id of the completed node.
-   *   - xpBonus: The XP bonus of the node.
-   *   - chapterCompleted: Whether the chapter has been completed.
-   *   - storyCompleted: Whether the story has been completed.
-   *   - completionXpBonus: The XP bonus for completing the story.
-   *   - nextNodeId: The id of the next node to complete.
-   *   - nextChapterId: The id of the next chapter to complete.
-   *   - postNarrative: The post-narrative of the completed node.
-   *   - totalXpEarned: The total XP earned by the user in the story.
+   * Advance to the next node in the story chapter.
+   * If the node is a challenge, throw a 400 error.
+   * If the node is a choice, throw a 400 error.
+   * If the node has not been completed, update the user's progress.
+   * If the node has prerequisites, throw a 400 error if the prerequisites are not met.
+   * @param {AdvanceNodePayload} payload - The node to advance to.
+   * @returns {Promise<NodeCompleteResult>} - The result of advancing to the node.
+   * @throws {ApiError} - If the node is a challenge or choice, or if the prerequisites are not met.
    */
-  async advanceNode(payload: CompleteNodePayload): Promise<CompleteNodeResult> {
+  async advanceNode(payload: AdvanceNodePayload): Promise<NodeCompleteResult> {
     const { storyId, chapterId, nodeId, userId, elapsedSeconds = 0 } = payload;
 
-    const chapter = await StoryChapter.findOne({
-      _id: chapterId,
-      story: storyId,
-    });
+    const [chapter, progress] = await Promise.all([
+      StoryChapter.findOne({ _id: chapterId, story: storyId }),
+      UserStoryProgress.findOne({ user: userId, story: storyId }),
+    ]);
 
-    if (!chapter) {
-      throw new ApiError(404, "Chapter not found");
+    if (!chapter) throw new ApiError(404, "Chapter not found");
+    if (!progress) {
+      throw new ApiError(400, "Start the story before completing nodes");
     }
-    const node = chapter.nodes.find((n) => n._id.toString() === nodeId);
 
-    if (!node) {
-      throw new ApiError(404, "Node not found");
-    }
+    const node = requireNode(chapter, nodeId);
 
     if (node.type === "challenge") {
       throw new ApiError(
         400,
-        "Challenge nodes are completed via flag submission, not this endpoint."
+        "Challenge nodes are completed via flag submission. Use POST /challenges/:id/submit"
+      );
+    }
+    if (node.type === "choice") {
+      throw new ApiError(
+        400,
+        "Choice nodes require a choice selection. Use POST .../choose"
       );
     }
 
-    return this._completeNode({
-      storyId,
-      chapterId,
-      nodeId,
-      userId,
-      pointsEarned: 0,
-      attempts: 1,
-      elapsedSeconds,
-    });
+    this.assertNodeIsCurrent(progress, nodeId);
+    this.assertNodeNotCompleted(progress, nodeId);
+    await this.assertPrerequisitesMet(progress, node);
+
+    const resolvedNextNodeId = node.nextNode?.toString() ?? null;
+
+    return this._commitNodeCompletion(
+      {
+        storyId,
+        chapterId,
+        nodeId,
+        userId,
+        pointsEarned: 0,
+        attempts: 1,
+        elapsedSeconds,
+        resolvedNextNodeId,
+      },
+      chapter
+    );
   }
 
   /**
-   * Notifies the service that a challenge has been solved by a user.
-   * Updates the user's progress in the story, and marks the challenge node as complete.
-   * Does nothing if the challenge is not found, or if the user does not have active progress for the story.
-   * @param challengeId The id of the challenge.
-   * @param userId The id of the user.
-   * @param pointsEarned The points earned for solving the challenge.
-   * @param attempts The number of attempts made to solve the challenge.
+   * Make a choice in the story.
+   *
+   * If the node is not a choice node, an error is thrown.
+   * If the choice is invalid, an error is thrown.
+   * If the node has not been started yet, an error is thrown.
+   * If the node has already been completed, an error is thrown.
+   * If the node has prerequisites that have not been met, an error is thrown.
+   *
+   * @param {MakeChoicePayload} payload - The payload to make a choice
+   * @returns {Promise<NodeCompleteResult>} - The result of committing the node completion
+   */
+  async makeChoice(payload: MakeChoicePayload): Promise<NodeCompleteResult> {
+    const { storyId, chapterId, nodeId, userId, choiceLabel } = payload;
+
+    const [chapter, progress] = await Promise.all([
+      StoryChapter.findOne({ _id: chapterId, story: storyId }),
+      UserStoryProgress.findOne({ user: userId, story: storyId }),
+    ]);
+
+    if (!chapter) throw new ApiError(404, "Chapter not found");
+    if (!progress) {
+      throw new ApiError(400, "Start the story before making choices");
+    }
+
+    const node = requireNode(chapter, nodeId);
+
+    if (node.type !== "choice") {
+      throw new ApiError(
+        400,
+        `Node [order=${node.order}] is not a choice node`
+      );
+    }
+
+    this.assertNodeIsCurrent(progress, nodeId);
+    this.assertNodeNotCompleted(progress, nodeId);
+    await this.assertPrerequisitesMet(progress, node);
+
+    const chosen = node.choices.find((c) => c.label === choiceLabel);
+    if (!chosen) {
+      const validLabels = node.choices.map((c) => `"${c.label}"`).join(", ");
+      throw new ApiError(
+        400,
+        `Invalid choice "${choiceLabel}". Valid options: ${validLabels}`
+      );
+    }
+
+    // Compute which nodes the unchosen branches lead to — they get bypassed
+    const bypassedNodeIds = computeBypassedNodes(
+      chapter.nodes,
+      node,
+      choiceLabel
+    );
+
+    return this._commitNodeCompletion(
+      {
+        storyId,
+        chapterId,
+        nodeId,
+        userId,
+        pointsEarned: 0,
+        attempts: 1,
+        elapsedSeconds: 0,
+        choiceLabel,
+        resolvedNextNodeId: chosen.targetNode.toString(),
+        bypassedNodeIds,
+      },
+      chapter
+    );
+  }
+
+  /**
+   * Notifies the story service that a user has solved a challenge.
+   * This service will find the relevant StoryChapter and UserStoryProgress documents
+   * and advance the user's progress to the next node in the story.
+   * If the user has already completed the node, this function does nothing.
+   * If no submission record exists for the user, this function logs a warning and does nothing.
+   * Errors are logged, not thrown.
+   * @param {string} challengeId - The id of the challenge to notify the story service about.
+   * @param {Types.ObjectId} userId - The id of the user who solved the challenge.
+   * @param {number} pointsEarned - The points the user earned for solving the challenge.
+   * @param {number} attempts - The number of attempts the user took to solve the challenge.
    */
   async notifyChallengeSolved(
     challengeId: string,
@@ -692,19 +545,20 @@ class StoryService {
     pointsEarned: number,
     attempts: number
   ): Promise<void> {
-    // Find all story nodes that wrap this challenge
-    const nodes = await StoryNode.find({
-      challenge: new Types.ObjectId(challengeId),
+    // Find chapters containing a node that wraps this challenge
+    const chapters = await StoryChapter.find({
+      "nodes.challenge": new Types.ObjectId(challengeId),
+      status: "published",
     }).lean();
 
-    if (nodes.length === 0) return;
+    if (chapters.length === 0) return;
 
-    for (const node of nodes) {
-      const chapter = await StoryChapter.findById(node.chapter);
+    for (const chapter of chapters) {
+      const node = chapter.nodes.find(
+        (n) => n.challenge?.toString() === challengeId
+      );
+      if (!node) continue;
 
-      if (!chapter) continue;
-
-      // Check if this user has active progress for this story
       const progress = await UserStoryProgress.findOne({
         user: userId,
         story: chapter.story,
@@ -713,91 +567,372 @@ class StoryService {
 
       if (!progress) continue;
 
-      // Skip already completed
+      // Must be the current node
+      if (progress.currentNodeId.toString() !== node._id.toString()) continue;
+
+      // Already completed guard
       const alreadyDone = progress.completedNodes.some(
         (n) => n.nodeId.toString() === node._id.toString()
       );
-
       if (alreadyDone) continue;
 
-      await this._completeNode({
-        storyId: chapter.story.toString(),
-        chapterId: chapter._id.toString(),
-        nodeId: node._id.toString(),
-        userId,
-        pointsEarned,
-        attempts,
-        elapsedSeconds: 0,
+      // Ground-truth verification: confirm the solve exists in the Submission collection
+      const solveExists = await Submission.exists({
+        user: userId,
+        challenge: challengeId,
+        isCorrect: true,
       });
+
+      if (!solveExists) {
+        logger.warn(
+          `[Story] notifyChallengeSolved called but no Submission record found. ` +
+            `userId=${userId} challengeId=${challengeId} — skipping node advance`
+        );
+        continue;
+      }
+
+      const resolvedNextNodeId = node.nextNode?.toString() ?? null;
+
+      // Fire transaction — errors are logged, not thrown (never block flag submission)
+      const chapterDoc = await StoryChapter.findById(chapter._id);
+      if (!chapterDoc) continue;
+
+      await this._commitNodeCompletion(
+        {
+          storyId: chapter.story.toString(),
+          chapterId: chapter._id.toString(),
+          nodeId: node._id.toString(),
+          userId,
+          pointsEarned,
+          attempts,
+          elapsedSeconds: 0,
+          resolvedNextNodeId,
+        },
+        chapterDoc
+      );
     }
   }
 
   /**
-   * Makes a choice in a story chapter.
-   * Updates the user's progress in the story, and marks the choice node as complete.
-   * Does nothing if the choice node is not found, or if the user does not have active progress for the story.
-   * @param payload - The payload of the request with the following properties:
-   *   - storyId: The id of the story.
-   *   - chapterId: The id of the chapter.
-   *   - nodeId: The id of the choice node.
-   *   - userId: The id of the user.
-   *   - choiceLabel: The label of the choice made by the user.
-   * @returns A promise that resolves with an object containing the following properties:
-   *   - nodeId: The id of the completed node.
-   *   - xpBonus: The XP bonus of the node.
-   *   - chapterCompleted: Whether the chapter has been completed.
-   *   - storyCompleted: Whether the story has been completed.
-   *   - completionXpBonus: The XP bonus for completing the story.
-   *   - nextNodeId: The id of the next node to complete.
-   *   - nextChapterId: The id of the next chapter to complete.
-   *   - postNarrative: The post-narrative of the completed node.
-   *   - totalXpEarned: The total XP earned by the user in the story.
+   * Private transaction that commits a user's node completion.
+   * Called by `notifyChallengeSolved`.
+   * Errors are logged, not thrown (never block flag submission).
+   * @param {CommitNodePayload} payload - transaction payload
+   * @param {IStoryChapter} chapter - story chapter document
+   * @returns {Promise<NodeCompleteResult>} - transaction result
    */
-  async makeChoice(payload: MakeChoicePayload): Promise<CompleteNodeResult> {
-    const { storyId, chapterId, nodeId, userId, choiceLabel } = payload;
-
-    const chapter = await StoryChapter.findOne({
-      _id: chapterId,
-      story: storyId,
-    });
-
-    if (!chapter) {
-      throw new ApiError(404, "Chapter not found");
-    }
-
-    const node = chapter.nodes.find((n) => n._id.toString() === nodeId);
-
-    if (!node) {
-      throw new ApiError(404, "Node not found");
-    }
-
-    if (node.type !== "choice") {
-      throw new ApiError(400, "This node is not a choice node");
-    }
-
-    const choice = node.choices?.find((c) => c.label === choiceLabel);
-
-    if (!choice) {
-      throw new ApiError(400, `Invalid choice: ${choiceLabel}`);
-    }
-
-    return this._completeNode({
+  private async _commitNodeCompletion(
+    payload: CommitNodePayload,
+    chapter: IStoryChapter
+  ): Promise<NodeCompleteResult> {
+    const {
       storyId,
       chapterId,
       nodeId,
       userId,
-      pointsEarned: 0,
-      attempts: 1,
-      elapsedSeconds: 0,
+      pointsEarned,
+      attempts,
+      elapsedSeconds,
       choiceLabel,
-    });
+      resolvedNextNodeId,
+      bypassedNodeIds = [],
+    } = payload;
+
+    const node = requireNode(chapter, nodeId);
+
+    const story = await Story.findById(storyId)
+      .select("completionXpBonus completionCount")
+      .lean();
+    if (!story) throw new ApiError(400, "Story not found");
+
+    const session: ClientSession = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+      // Read current progress inside transaction
+      const progress = await UserStoryProgress.findOne({
+        user: userId,
+        story: storyId,
+      }).session(session);
+
+      if (!progress) {
+        throw new ApiError(
+          400,
+          "Progress record not found — start the story first"
+        );
+      }
+
+      // Idempotency guard
+      const alreadyDone = progress.completedNodes.some(
+        (n) => n.nodeId.toString() === nodeId
+      );
+      if (alreadyDone) {
+        await session.abortTransaction();
+        session.endSession();
+
+        return {
+          nodeId,
+          xpBonus: node.xpBonus,
+          postNarrative: node.postNarrative ?? null,
+          nextNodeId: progress.currentNodeId?.toString() ?? null,
+          nextChapterId: progress.currentChapterId?.toString() ?? null,
+          chapterCompleted: progress.completedChapters.some(
+            (c) => c.chapterId.toString() === chapterId
+          ),
+          storyCompleted: progress.status === "completed",
+          completionXpBonus: 0,
+          totalXpEarned: progress.totalXpEarned,
+        };
+      }
+
+      // Compute new state
+      const xpGained = pointsEarned + node.xpBonus;
+
+      progress.completedNodes.push({
+        nodeId: new Types.ObjectId(nodeId),
+        challengeId: node.challenge ?? undefined,
+        completedAt: new Date(),
+        pointsEarned,
+        xpBonus: node.xpBonus,
+        attempts,
+      });
+
+      progress.totalXpEarned += xpGained;
+      progress.playTimeSeconds += elapsedSeconds;
+
+      // Add bypassed nodes from the unchosen branch
+      for (const bypassedId of bypassedNodeIds) {
+        const objId = new Types.ObjectId(bypassedId);
+        const alreadyBypassed = progress.bypassedNodeIds.some(
+          (id) => id.toString() === bypassedId
+        );
+        if (!alreadyBypassed) {
+          progress.bypassedNodeIds.push(objId);
+        }
+      }
+
+      // Record choice
+      if (choiceLabel && resolvedNextNodeId) {
+        progress.choiceMade.push({
+          nodeId: new Types.ObjectId(nodeId),
+          choiceLabel,
+          routedToNodeId: new Types.ObjectId(resolvedNextNodeId),
+          madeAt: new Date(),
+        });
+      }
+
+      // Chapter completion check
+      const completedNodeIds = new Set(
+        progress.completedNodes.map((n) => n.nodeId.toString())
+      );
+      const bypassedSet = new Set(
+        progress.bypassedNodeIds.map((id) => id.toString())
+      );
+
+      const chapterJustCompleted =
+        isChapterComplete(chapter.nodes, completedNodeIds, bypassedSet) &&
+        !progress.completedChapters.some(
+          (c) => c.chapterId.toString() === chapterId
+        );
+
+      if (chapterJustCompleted) {
+        progress.completedChapters.push({
+          chapterId: new Types.ObjectId(chapterId),
+          completedAt: new Date(),
+        });
+      }
+
+      // Story completion check
+      let storyCompleted = false;
+      let completionXpBonus = 0;
+
+      if (chapterJustCompleted && progress.status !== "completed") {
+        const allPublishedChapters = await StoryChapter.find({
+          story: storyId,
+          status: "published",
+        })
+          .select("_id")
+          .session(session)
+          .lean();
+
+        const allDone = allPublishedChapters.every((c) =>
+          progress.completedChapters.some(
+            (pc) => pc.chapterId.toString() === c._id.toString()
+          )
+        );
+
+        if (allDone) {
+          storyCompleted = true;
+          completionXpBonus = story.completionXpBonus;
+          progress.status = "completed";
+          progress.completedAt = new Date();
+          progress.totalXpEarned += completionXpBonus;
+        }
+      }
+
+      // Resolve next node in graph
+      let nextNodeId: string | null = resolvedNextNodeId ?? null;
+      let nextChapterId: string | null = null;
+
+      if (nextNodeId) {
+        // Advance activePath
+        progress.activePath.push(new Types.ObjectId(nextNodeId));
+        progress.currentNodeId = new Types.ObjectId(nextNodeId);
+      } else if (chapterJustCompleted) {
+        // Find next chapter by order
+        const nextChapter = await StoryChapter.findOne({
+          story: storyId,
+          status: "published",
+          order: { $gt: chapter.order },
+          _id: { $nin: progress.completedChapters.map((c) => c.chapterId) },
+        })
+          .sort({ order: 1 })
+          .session(session)
+          .lean();
+
+        if (nextChapter) {
+          nextChapterId = nextChapter._id.toString();
+          const entryNode = nextChapter.nodes.find((n) => n.isEntryPoint);
+
+          if (entryNode) {
+            nextNodeId = entryNode._id.toString();
+            progress.currentChapterId = nextChapter._id;
+            progress.currentNodeId = entryNode._id;
+            progress.activePath.push(entryNode._id);
+          }
+        }
+      }
+
+      // Persist progress
+      await progress.save({ session, validateBeforeSave: false });
+
+      // Award completion XP to user score
+      if (storyCompleted && completionXpBonus > 0) {
+        await User.findByIdAndUpdate(
+          userId,
+          { $inc: { score: completionXpBonus } },
+          { session }
+        );
+      }
+
+      // Increment story completionCount
+      if (storyCompleted) {
+        await Story.findByIdAndUpdate(
+          storyId,
+          { $inc: { completionCount: 1 } },
+          { session }
+        );
+      }
+
+      await session.commitTransaction();
+
+      return {
+        nodeId,
+        xpBonus: node.xpBonus,
+        postNarrative: node.postNarrative ?? null,
+        nextNodeId,
+        nextChapterId,
+        chapterCompleted: chapterJustCompleted,
+        storyCompleted,
+        completionXpBonus,
+        totalXpEarned: progress.totalXpEarned,
+      };
+    } catch (err) {
+      await session.abortTransaction();
+      logger.error(
+        "[StoryService._commitNodeCompletion] Transaction aborted",
+        err
+      );
+      throw err;
+    } finally {
+      session.endSession();
+    }
+  }
+
+  // Validation Helpers
+
+  /**
+   * Throws an ApiError if the provided nodeId does not match the current node's id
+   * in the user's story progress.
+   * @param {IUserStoryProgress} progress - The user's story progress document.
+   * @param {string} nodeId - The id of the node to check.
+   */
+  private assertNodeIsCurrent(
+    progress: IUserStoryProgress,
+    nodeId: string
+  ): void {
+    if (progress.currentNodeId.toString() !== nodeId) {
+      throw new ApiError(
+        400,
+        `Node ${nodeId} is not your current node. ` +
+          `Your current node is ${progress.currentNodeId}. ` +
+          `Complete nodes in graph order.`
+      );
+    }
   }
 
   /**
-   * Gets the progress of a user in a story.
-   * @param storyId The id of the story.
-   * @param userId The id of the user.
-   * @returns A promise that resolves with a StoryProgressView object or null if the user does not have progress for the story.
+   * Throws an ApiError if the node with the given nodeId has already been completed.
+   * @param {IUserStoryProgress} progress - The user's story progress document.
+   * @param {string} nodeId - The id of the node to check.
+   */
+  private assertNodeNotCompleted(
+    progress: IUserStoryProgress,
+    nodeId: string
+  ): void {
+    const already = progress.completedNodes.some(
+      (n) => n.nodeId.toString() === nodeId
+    );
+    if (already) {
+      throw new ApiError(409, `Node ${nodeId} has already been completed`);
+    }
+  }
+
+  /**
+   * Asserts that the user has completed all the prerequisite nodes for the given node.
+   * Throws an ApiError if any of the prerequisites have not been completed.
+   * @param {IUserStoryProgress} progress - The user's story progress document.
+   * @param {IStoryNode} node - The node to check for completed prerequisites.
+   */
+  private async assertPrerequisitesMet(
+    progress: IUserStoryProgress,
+    node: IStoryNode
+  ): Promise<void> {
+    // Bypassed nodes cannot be completed
+    const isBypassed = progress.bypassedNodeIds.some(
+      (id) => id.toString() === node._id.toString()
+    );
+    if (isBypassed) {
+      throw new ApiError(
+        400,
+        `Node ${node._id} is on a story branch you did not take and cannot be completed`
+      );
+    }
+
+    if (node.unlockAfter.length === 0) return;
+
+    const completedIds = new Set(
+      progress.completedNodes.map((n) => n.nodeId.toString())
+    );
+    const unmet = node.unlockAfter.filter(
+      (prereq) => !completedIds.has(prereq.toString())
+    );
+
+    if (unmet.length > 0) {
+      throw new ApiError(
+        400,
+        `Cannot complete this node yet. ` +
+          `Complete prerequisite node(s) first: ${unmet.join(", ")}`
+      );
+    }
+  }
+
+  /**
+   * Retrieves the user's story progress for the given story.
+   *
+   * @param {string} storyId - The id of the story to retrieve progress for.
+   * @param {Types.ObjectId} userId - The id of the user to retrieve progress for.
+   * @returns {Promise<StoryProgressView | null>} - The user's story progress object, or null if no progress is found.
    */
   async getProgress(
     storyId: string,
@@ -809,30 +944,51 @@ class StoryService {
     }).lean();
 
     if (!progress) return null;
-
-    return this.buildProgressView(progress._id.toString(), userId);
+    return this.buildProgressView(progress);
   }
 
   /**
-   * Gets the leaderboard of a story, sorted by total XP earned and then by completion time.
-   * @param storyId The id of the story.
-   * @param limit The number of entries to return.
-   * @returns A promise that resolves with an array of leaderboard entries.
-   * Each entry has the following properties:
-   *   - rank: The rank of the entry.
-   *   - user: The user who made the progress.
-   *   - status: The status of the user's progress (in_progress or completed).
-   *   - totalXpEarned: The total XP earned by the user in the story.
-   *   - playTimeSeconds: The total play time of the user in the story in seconds.
-   *   - completedAt: The timestamp when the user completed the story.
-   *   - nodesCompleted: The number of nodes completed by the user in the story.
+   * Builds a StoryProgressView object from a UserStoryProgress document.
+   * @param {IUserStoryProgress} progress - The user's story progress document.
+   * @returns {StoryProgressView} - The user's story progress object.
    */
-  async getStoryLeaderBoard(storyId: string, limit = 20) {
+  private buildProgressView(progress: IUserStoryProgress): StoryProgressView {
+    const h = Math.floor(progress.playTimeSeconds / 3600);
+    const m = Math.floor((progress.playTimeSeconds % 3600) / 60);
+
+    return {
+      storyId: progress.story.toString(),
+      status: progress.status,
+      currentChapterId: progress.currentChapterId.toString(),
+      currentNodeId: progress.currentNodeId.toString(),
+      completedNodeIds: progress.completedNodes.map((n) => n.nodeId.toString()),
+      bypassedNodeIds: progress.bypassedNodeIds.map((id) => id.toString()),
+      activePath: progress.activePath.map((id) => id.toString()),
+      totalXpEarned: progress.totalXpEarned,
+      playTimeSeconds: progress.playTimeSeconds,
+      playTimeFormatted: h > 0 ? `${h}h ${m}m` : `${m}m`,
+      choicesMade: progress.choiceMade.map((c) => ({
+        nodeId: c.nodeId.toString(),
+        choiceLabel: c.choiceLabel,
+        routedToNodeId: c.routedToNodeId.toString(),
+        madeAt: c.madeAt,
+      })),
+    };
+  }
+
+  // Leaderboard
+
+  /**
+   * Retrieves the leaderboard for a given story, sorted by total XP earned and then completion time.
+   * The leaderboard will contain the user's rank, username, avatar, country, status (in_progress/completed), total XP earned, time taken to complete, and the number of nodes completed.
+   * @param {string} storyId - The id of the story to retrieve the leaderboard for.
+   * @param {number} [limit=20] - The number of entries to return in the leaderboard.
+   * @returns {Promise<LeaderboardEntry[]>} - A promise that resolves to an array of leaderboard entries.
+   */
+  async getStoryLeaderboard(storyId: string, limit = 20) {
     const entries = await UserStoryProgress.find({
       story: storyId,
-      status: {
-        $in: ["in_progress", "completed"],
-      },
+      status: { $in: ["in_progress", "completed"] },
     })
       .populate("user", "username avatar country")
       .sort({ totalXpEarned: -1, completedAt: 1 })
@@ -841,10 +997,6 @@ class StoryService {
         "user status totalXpEarned playTimeSeconds completedAt completedNodes"
       )
       .lean();
-
-    if (entries.length === 0) {
-      return [];
-    }
 
     return entries.map((e, i) => ({
       rank: i + 1,
@@ -857,102 +1009,89 @@ class StoryService {
     }));
   }
 
-  // Admin operations
-
   /**
-   * Creates a new story in the database.
-   * @param payload The payload object containing the story details.
-   * @returns A promise that resolves with the newly created story object.
-   * @throws {ApiError} If a story with the same title already exists.
-   * @throws {ApiError} If the story creation fails.
+   * Creates a new story.
+   * Throws 409 if a story with the same title already exists.
+   * @param {CreateStoryPayload} payload - The payload containing the story's title, authorId, and other information.
+   * @returns {Promise<IStory>} - A promise that resolves to the newly created story.
    */
   async createStory(payload: CreateStoryPayload): Promise<IStory> {
     const exists = await Story.findOne({
       title: {
-        $regex: new RegExp(`${escapeStringRegexp(payload.title)}$`, "i"),
+        $regex: new RegExp(`^${escapeStringRegexp(payload.title)}$`, "i"),
       },
     });
-
-    if (exists) {
+    if (exists)
       throw new ApiError(409, "A story with this title already exists");
-    }
 
-    const story = await Story.create({
-      ...payload,
-      author: payload.authorId,
-    });
-
-    if (!story) {
-      throw new ApiError(500, "Failed to create story");
-    }
-
-    return story;
+    return Story.create({ ...payload, author: payload.authorId });
   }
 
   /**
-   * Updates a story in the database.
-   * @param {UpdateStoryPayload} payload - The payload object containing the story details.
-   * @returns {Promise<IStory>} A promise that resolves with the updated story object.
-   * @throws {ApiError} 404 if the story is not found.
-   * @throws {ApiError} 409 if a story with the same title already exists.
+   * Updates a story.
+   * Throws 404 if the story does not exist.
+   * Throws 409 if a story with the same title already exists.
+   * @param {UpdateStoryPayload} payload - The payload containing the story's ID, requester ID, and other information.
+   * @returns {Promise<IStory>} - A promise that resolves to the updated story.
    */
   async updateStory(payload: UpdateStoryPayload): Promise<IStory> {
     const { storyId, requesterId: _r, ...rest } = payload;
-
     const story = await Story.findById(storyId);
-
-    if (!story) {
-      throw new ApiError(404, "Story not found");
-    }
+    if (!story) throw new ApiError(404, "Story not found");
 
     if (rest.title && rest.title !== story.title) {
       const dup = await Story.findOne({
         title: {
-          $regex: new RegExp(`${escapeStringRegexp(rest.title)}$`, "i"),
-          _id: { $ne: storyId },
+          $regex: new RegExp(`^${escapeStringRegexp(rest.title)}$`, "i"),
         },
+        _id: { $ne: storyId },
       });
-
-      if (dup) {
-        throw new ApiError(409, "Story title already in use");
-      }
+      if (dup) throw new ApiError(409, "Story title already in use");
     }
 
     Object.assign(story, rest);
-
     await story.save();
-
     return story;
   }
 
   /**
    * Sets the status of a story.
+   * Throws 404 if the story does not exist.
+   * Throws 400 if the story has no published chapters when trying to publish.
+   * Throws 400 if any of the published chapters have graph errors when trying to publish.
    * @param {string} storyId - The ID of the story to update.
    * @param {StoryStatus} status - The new status of the story.
-   * @returns {Promise<IStory>} A promise that resolves with the updated story object.
-   * @throws {ApiError} 404 - Story not found.
-   * @throws {ApiError} 400 - Cannot publish a story with no published chapters. Create and publish at least one chapter first.
+   * @returns {Promise<IStory>} - A promise that resolves to the updated story.
    */
   async setStoryStatus(storyId: string, status: StoryStatus): Promise<IStory> {
     const story = await Story.findById(storyId);
-
-    if (!story) {
-      throw new ApiError(404, "Story not found");
-    }
+    if (!story) throw new ApiError(404, "Story not found");
 
     if (status === "published") {
-      // must have at least one chaper with at least one node
-      const chapterCount = await StoryChapter.countDocuments({
+      const chapters = await StoryChapter.find({
         story: storyId,
         status: "published",
-        "nodes.0": { $exists: true },
-      });
+      }).lean();
 
-      if (chapterCount === 0) {
+      if (chapters.length === 0) {
         throw new ApiError(
           400,
-          "Cannot publish a story with no published chapters. Create and publish at least one chapter first"
+          "Cannot publish: story has no published chapters"
         );
+      }
+
+      // Validate every published chapter graph
+      for (const chapter of chapters) {
+        const chapterDoc = await StoryChapter.findById(chapter._id);
+        if (!chapterDoc) continue;
+        const result: GraphValidationResult = chapterDoc.validatePath();
+        if (!result.valid) {
+          throw new ApiError(
+            400,
+            `Chapter "${chapter.title}" has graph errors:\n` +
+              result.errors.join("\n")
+          );
+        }
       }
     }
 
@@ -963,62 +1102,65 @@ class StoryService {
 
   /**
    * Deletes a story and all associated chapters and user progress.
-   * @throws {ApiError} 404 - Story not found.
-   * @throws {ApiError} 409 - Cannot delete a story with active users. Archive it instead.
+   * Throws an error if the story is currently being played by any users.
+   *
+   * @param {string} storyId - The id of the story to delete.
+   * @returns {Promise<void>} - A promise that resolves when the deletion is complete.
+   * @throws {ApiError} - If the story is not found, or if users are currently playing the story.
    */
   async deleteStory(storyId: string): Promise<void> {
     const story = await Story.findById(storyId);
+    if (!story) throw new ApiError(404, "Story not found");
 
-    if (!story) {
-      throw new ApiError(404, "Story not found");
-    }
-
-    const progressCount = await UserStoryProgress.countDocuments({
+    const activeCount = await UserStoryProgress.countDocuments({
       story: storyId,
       status: "in_progress",
     });
-
-    if (progressCount > 0) {
+    if (activeCount > 0) {
       throw new ApiError(
         409,
-        `${progressCount} user(s) are actively playing this story. Archive it instead.`
+        `${activeCount} user(s) are actively playing this story. Archive it instead.`
       );
     }
 
-    await Promise.all([
-      Story.findByIdAndDelete(storyId),
-      StoryChapter.deleteMany({ story: storyId }),
-      UserStoryProgress.deleteMany({ story: storyId }),
-    ]);
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+      await Promise.all([
+        Story.findByIdAndDelete(storyId, { session }),
+        StoryChapter.deleteMany({ story: storyId }, { session }),
+        UserStoryProgress.deleteMany({ story: storyId }, { session }),
+      ]);
+      await session.commitTransaction();
+    } catch (err) {
+      await session.abortTransaction();
+      throw err;
+    } finally {
+      session.endSession();
+    }
   }
 
-  // Chapter admin
-
   /**
-   * Creates a new chapter in the database.
-   * @param {CreateChapterPayload} payload - The payload object containing the chapter details.
-   * @returns {Promise<IStoryChapter>} A promise that resolves with the created chapter object.
-   * @throws {ApiError} 404 - Story not found.
-   * @throws {ApiError} 409 - A chapter with the same order already exists in this story.
-   * @throws {ApiError} 500 - Failed to create chapter.
+   * Creates a new chapter for a story.
+   * Throws an error if the story is not found, or if a chapter with the same order already exists.
+   *
+   * @param {CreateChapterPayload} payload - The payload containing the storyId, title, order, openingNarrative, closingNarrative, coverImageUrl, accentColor, estimatedMinutes, and unlockAfterChapters.
+   * @returns {Promise<IStoryChapter>} - A promise that resolves to the newly created chapter.
+   * @throws {ApiError} - If the story is not found, or if a chapter with the same order already exists.
    */
   async createChapter(payload: CreateChapterPayload): Promise<IStoryChapter> {
     const story = await Story.findById(payload.storyId);
+    if (!story) throw new ApiError(404, "Story not found");
 
-    if (!story) {
-      throw new ApiError(404, "Story not found");
-    }
-
-    // Enforce unique order within a story
     const orderExists = await StoryChapter.findOne({
       story: payload.storyId,
       order: payload.order,
     });
-
     if (orderExists) {
       throw new ApiError(
         409,
-        `A chapter with order ${payload.order} already exists in this story`
+        `Chapter with order ${payload.order} already exists`
       );
     }
 
@@ -1030,22 +1172,13 @@ class StoryService {
       closingNarrative: payload.closingNarrative,
       coverImageUrl: payload.coverImageUrl,
       accentColor: payload.accentColor,
-      estimatedMinutes: payload.estimatedMinutes
-        ? Number(payload.estimatedMinutes)
-        : undefined,
+      estimatedMinutes: payload.estimatedMinutes,
       unlockAfterChapters:
         payload.unlockAfterChapters?.map((id) => new Types.ObjectId(id)) ?? [],
     });
 
-    if (!chapter) {
-      throw new ApiError(500, "Failed to create chapter");
-    }
-
-    // Add to story chapters array
     await Story.findByIdAndUpdate(payload.storyId, {
-      $push: {
-        chapters: chapter._id,
-      },
+      $push: { chapters: chapter._id },
     });
 
     return chapter;
@@ -1053,182 +1186,307 @@ class StoryService {
 
   /**
    * Updates a chapter with the given payload.
-   * @param {UpdateChapterPayload} payload - The chapter data to update.
-   * @returns {Promise<IStoryChapter>} - The updated chapter.
-   * @throws {ApiError} - If the chapter is not found or if the chapter order is already taken.
+   * Throws an error if the chapter is not found, or if a chapter with the same order already exists.
+   * @param {UpdateChapterPayload} payload - The payload containing the chapterId, storyId, requesterId, and any updated fields.
+   * @returns {Promise<IStoryChapter>} - A promise that resolves to the updated chapter.
+   * @throws {ApiError} - If the chapter is not found, or if a chapter with the same order already exists.
    */
   async updateChapter(payload: UpdateChapterPayload): Promise<IStoryChapter> {
-    const { chapterId, storyId: _s, requesterid: _r, ...rest } = payload;
+    const { chapterId, storyId: _s, requesterId: _r, ...rest } = payload;
 
     const chapter = await StoryChapter.findById(chapterId);
-
-    if (!chapter) {
-      throw new ApiError(404, "Chapter not found");
-    }
+    if (!chapter) throw new ApiError(404, "Chapter not found");
 
     if (rest.order !== undefined && rest.order !== chapter.order) {
-      const orderExists = await StoryChapter.findOne({
+      const taken = await StoryChapter.findOne({
         story: chapter.story,
         order: rest.order,
-        _id: {
-          $ne: chapterId,
-        },
+        _id: { $ne: chapterId },
       });
-
-      if (orderExists) {
-        throw new ApiError(409, `Chapter order ${rest.order} is already taken`);
-      }
+      if (taken)
+        throw new ApiError(409, `Chapter order ${rest.order} is taken`);
     }
 
     Object.assign(chapter, rest);
-
     await chapter.save();
     return chapter;
   }
 
   /**
-   * Deletes a chapter and removes it from the story's chapters array.
-   * @throws {ApiError} 404 - Chapter not found.
+   * Publishes a chapter to the story's published chapters list.
+   * Throws an error if the chapter is not found, or if the chapter's graph is invalid.
+   * @param {string} chapterId - The ID of the chapter to publish.
+   * @param {string} storyId - The ID of the story that the chapter belongs to.
+   * @returns {Promise<{ chapter: IStoryChapter; validation: GraphValidationResult }>}
+   * A promise that resolves to an object containing the published chapter and its graph validation result.
+   * @throws {ApiError} - If the chapter is not found, or if the chapter's graph is invalid.
+   */
+  async publishChapter(
+    chapterId: string,
+    storyId: string
+  ): Promise<{ chapter: IStoryChapter; validation: GraphValidationResult }> {
+    const chapter = await StoryChapter.findOne({
+      _id: chapterId,
+      story: storyId,
+    });
+    if (!chapter) throw new ApiError(404, "Chapter not found");
+
+    const validation = chapter.validatePath();
+    if (!validation.valid) {
+      throw new ApiError(
+        400,
+        `Chapter graph is invalid:\n${validation.errors.join("\n")}`
+      );
+    }
+
+    // Cache entry node on the chapter document
+    const entryNode = chapter.nodes.find((n) => n.isEntryPoint);
+    if (entryNode) {
+      chapter.entryNodeId = entryNode._id;
+    }
+
+    chapter.status = "published";
+    await chapter.save({ validateBeforeSave: false });
+
+    return { chapter, validation };
+  }
+
+  /**
+   * Deletes a chapter from the story's chapter list.
+   * Throws an error if the chapter is not found.
+   * @param {string} chapterId - The ID of the chapter to delete.
+   * @param {string} storyId - The ID of the story that the chapter belongs to.
+   * @returns {Promise<void>} - A promise that resolves when the deletion is complete.
+   * @throws {ApiError} - If the chapter is not found.
    */
   async deleteChapter(chapterId: string, storyId: string): Promise<void> {
     const chapter = await StoryChapter.findOne({
       _id: chapterId,
       story: storyId,
     });
-
-    if (!chapter) {
-      throw new ApiError(404, "Chapter not found");
-    }
+    if (!chapter) throw new ApiError(400, "Chapter not found");
 
     await Promise.all([
       StoryChapter.findByIdAndDelete(chapterId),
-      Story.findByIdAndUpdate(storyId, {
-        $pull: {
-          chapters: chapter._id,
-        },
-      }),
+      Story.findByIdAndUpdate(storyId, { $pull: { chapters: chapter._id } }),
     ]);
   }
 
-  // Node admin
-
   /**
-   * Creates a new node in the database.
-   * @param {CreateNodePayload} payload - The node data to create.
-   * @returns {Promise<IStoryChapter>} - The updated chapter containing the new node.
-   * @throws {ApiError} 404 - Chapter not found.
-   * @throws {ApiError} 409 - A node with the same order already exists in this chapter.
+   * Creates a new node in the given chapter.
+   * Throws an error if the chapter is not found, or if a node with the same order already exists.
+   * Throws an error if the chapter already has an entry point node and the new node is also an entry point.
+   * Throws an error if nextNode or targetNodes in choices reference unknown nodes in the chapter.
+   * Throws an error if unlockAfter references unknown nodes in the chapter.
+   * @param {CreateNodePayload} payload - The payload containing the chapterId, storyId, requesterId, and any updated fields.
+   * @returns {Promise<IStoryChapter>} - A promise that resolves to the updated chapter.
+   * @throws {ApiError} - If the chapter is not found, or if a node with the same order already exists, or if the chapter already has an entry point node and the new node is also an entry point, or if nextNode or targetNodes in choices reference unknown nodes in the chapter, or if unlockAfter references unknown nodes in the chapter.
    */
   async createNode(payload: CreateNodePayload): Promise<IStoryChapter> {
     const chapter = await StoryChapter.findOne({
       _id: payload.chapterId,
       story: payload.storyId,
     });
+    if (!chapter) throw new ApiError(400, "Chapter not found");
 
-    if (!chapter) {
-      throw new ApiError(404, "Chapter not found");
+    // Only one entry point allowed
+    if (payload.isEntryPoint) {
+      const existingEntry = chapter.nodes.find((n) => n.isEntryPoint);
+      if (existingEntry) {
+        throw new ApiError(
+          409,
+          `Chapter already has an entry point node [order=${existingEntry.order}]. ` +
+            `Update or remove it before setting a new entry point.`
+        );
+      }
     }
 
     const orderExists = chapter.nodes.some((n) => n.order === payload.order);
-
     if (orderExists) {
       throw new ApiError(
         409,
-        `A node with order ${payload.order} already exists in this chapter`
+        `Node with order ${payload.order} already exists in this chapter`
       );
     }
 
-    const newNode = {
+    // Validate nextNode and targetNodes exist within chapter
+    const nodeIds = new Set(chapter.nodes.map((n) => n._id.toString()));
+
+    if (payload.nextNode && !nodeIds.has(payload.nextNode)) {
+      throw new ApiError(
+        400,
+        `nextNode ${payload.nextNode} does not exist in this chapter`
+      );
+    }
+
+    for (const choice of payload.choices ?? []) {
+      if (!nodeIds.has(choice.targetNode)) {
+        throw new ApiError(
+          400,
+          `Choice "${choice.label}" targets unknown node ${choice.targetNode}`
+        );
+      }
+    }
+
+    for (const prereq of payload.unlockAfter ?? []) {
+      if (!nodeIds.has(prereq)) {
+        throw new ApiError(
+          400,
+          `unlockAfter references unknown node ${prereq}`
+        );
+      }
+    }
+
+    chapter.nodes.push({
       chapter: chapter._id,
       type: payload.type,
       order: payload.order,
+      isEntryPoint: payload.isEntryPoint ?? false,
       challenge: payload.challengeId
         ? new Types.ObjectId(payload.challengeId)
         : null,
-      preNarrative: payload.preNarrative,
-      postNarrative: payload.postNarrative,
-      characterId: payload.characterId,
+      preNarrative: payload.preNarrative ?? null,
+      postNarrative: payload.postNarrative ?? null,
+      characterId: payload.characterId ?? null,
+      nextNode: payload.nextNode ? new Types.ObjectId(payload.nextNode) : null,
+      choices:
+        payload.choices?.map((c) => ({
+          label: c.label,
+          description: c.description,
+          targetNode: new Types.ObjectId(c.targetNode),
+        })) ?? [],
       unlockAfter:
         payload.unlockAfter?.map((id) => new Types.ObjectId(id)) ?? [],
       isOptional: payload.isOptional ?? false,
       xpBonus: payload.xpBonus ?? 0,
-      content: payload.content,
-      choices:
-        payload.choices?.map((c) => ({
-          ...c,
-          unlocksNode: new Types.ObjectId(c.unlocksNode),
-        })) ?? [],
-    };
+      content: payload.content ?? null,
+    } as never);
 
-    chapter.nodes.push(newNode as never);
     await chapter.save({ validateBeforeSave: false });
-
     return chapter;
   }
 
   /**
-   * Updates a node in a story chapter with the given payload.
-   * @param {UpdateNodePayload} payload - The node data to update.
-   * @returns {Promise<IStoryChapter>} - The updated chapter containing the updated node.
-   * @throws {ApiError} 404 - Chapter not found.
-   * @throws {ApiError} 404 - Node not found.
-   * @throws {ApiError} 409 - A node with the same order already exists in this chapter.
+   * Updates a node in the story chapter.
+   * If the node's order is changed, it will be re-positioned in the chapter.
+   * If the node's nextNode or choices are updated, they will be re-validated.
+   * If the node is marked as an entry point, the chapter must not already have an entry point.
+   * @param {UpdateNodePayload} payload - The payload to update the node
+   * @returns {Promise<IStoryChapter>} - The updated chapter document
+   * @throws {ApiError} - If the chapter or node is not found, or if the node's order is already taken
    */
   async updateNode(payload: UpdateNodePayload): Promise<IStoryChapter> {
     const { nodeId, chapterId, requesterId: _r, ...rest } = payload;
 
     const chapter = await StoryChapter.findById(chapterId);
-
-    if (!chapter) {
-      throw new ApiError(404, "Chapter not found");
-    }
+    if (!chapter) throw new ApiError(404, "Chapter not found");
 
     const nodeIdx = chapter.nodes.findIndex((n) => n._id.toString() === nodeId);
+    if (nodeIdx === -1) throw new ApiError(404, "Node not found");
 
-    if (nodeIdx === -1) {
-      throw new ApiError(404, "Node not found");
+    // Entry point guard
+    if (rest.isEntryPoint === true) {
+      const existingEntry = chapter.nodes.find(
+        (n, i) => n.isEntryPoint && i !== nodeIdx
+      );
+      if (existingEntry) {
+        throw new ApiError(
+          409,
+          `Chapter already has an entry point. Remove it from node [order=${existingEntry.order}] first.`
+        );
+      }
     }
 
     if (rest.order !== undefined) {
-      const orderTaken = chapter.nodes.some(
+      const taken = chapter.nodes.some(
         (n, i) => i !== nodeIdx && n.order === rest.order
       );
-
-      if (orderTaken) {
+      if (taken) {
         throw new ApiError(409, `Node order ${rest.order} is already taken`);
       }
     }
 
+    // Re-validate refs if updating nextNode or choices
+    const nodeIds = new Set(chapter.nodes.map((n) => n._id.toString()));
+
+    if (rest.nextNode !== undefined && rest.nextNode !== null) {
+      if (!nodeIds.has(rest.nextNode)) {
+        throw new ApiError(
+          400,
+          `nextNode ${rest.nextNode} does not exist in this chapter`
+        );
+      }
+    }
+
+    for (const choice of rest.choices ?? []) {
+      if (!nodeIds.has(choice.targetNode)) {
+        throw new ApiError(
+          400,
+          `Choice "${choice.label}" targets unknown node ${choice.targetNode}`
+        );
+      }
+    }
+
     Object.assign(chapter.nodes[nodeIdx], rest);
-
     await chapter.save({ validateBeforeSave: false });
-
     return chapter;
   }
 
   /**
-   * Deletes a node from the database.
-   * @param {string} nodeId - The id of the node to delete.
-   * @param {string} chapterId - The id of the chapter that the node belongs to.
-   * @returns {Promise<IStoryChapter>} - The updated chapter with the node deleted.
-   * @throws {ApiError} 404 - Chapter not found.
-   * @throws {ApiError} 404 - Node not found.
+   * Deletes a node from the story chapter.
+   * If any other node references this one (via nextNode, choices, or unlockAfter),
+   * an error will be thrown, and those nodes must be updated first.
+   * @throws {ApiError} - If the chapter or node is not found, or if the node is referenced by another node
+   * @returns {Promise<IStoryChapter>} - The updated chapter document
    */
   async deleteNode(nodeId: string, chapterId: string): Promise<IStoryChapter> {
     const chapter = await StoryChapter.findById(chapterId);
-    if (!chapter) {
-      throw new ApiError(404, "Chapter not found");
-    }
+    if (!chapter) throw new ApiError(404, "Chapter not found");
 
     const idx = chapter.nodes.findIndex((n) => n._id.toString() === nodeId);
+    if (idx === -1) throw new ApiError(404, "Node not found");
 
-    if (idx === -1) {
-      throw new ApiError(404, "Node not found");
+    // Check if any other node references this one
+    const referencedBy = chapter.nodes.filter(
+      (n, i) =>
+        i !== idx &&
+        (n.nextNode?.toString() === nodeId ||
+          n.choices.some((c) => c.targetNode.toString() === nodeId) ||
+          n.unlockAfter.some((id) => id.toString() === nodeId))
+    );
+
+    if (referencedBy.length > 0) {
+      const refs = referencedBy.map((n) => `[order=${n.order}]`).join(", ");
+      throw new ApiError(
+        409,
+        `Cannot delete node — it is referenced by ${refs}. ` +
+          `Update those nodes first.`
+      );
     }
+
     chapter.nodes.splice(idx, 1);
     await chapter.save({ validateBeforeSave: false });
-
     return chapter;
+  }
+
+  /**
+   * Validates the node graph of a chapter.
+   * Throws 404 if the chapter is not found.
+   * @param {string} chapterId - The ID of the chapter to validate.
+   * @param {string} storyId - The ID of the story that the chapter belongs to.
+   * @returns {Promise<GraphValidationResult>} - A promise that resolves to the graph validation result.
+   */
+  async validateChapterGraph(
+    chapterId: string,
+    storyId: string
+  ): Promise<GraphValidationResult> {
+    const chapter = await StoryChapter.findOne({
+      _id: chapterId,
+      story: storyId,
+    });
+    if (!chapter) throw new ApiError(404, "Chapter not found");
+
+    return chapter.validatePath();
   }
 }
 
