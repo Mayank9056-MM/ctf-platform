@@ -1,4 +1,5 @@
 import mongoose, { Types, Document } from "mongoose";
+import { DIFFICULTY_LEVELS } from "../utils/constants";
 
 // Enums
 
@@ -32,127 +33,102 @@ export type StoryDifficulty =
   | "hard"
   | "insane";
 
-// Sub documents interfaces
+// Sub document interfaces
 
 export interface IStoryCharacter {
-  /** Short identifier used in nodes, e.g. "agent", "hacker", "analyst" */
   id: string;
   name: string;
   avatarUrl?: string;
   bio?: string;
 }
 
+export interface IStoryChoice {
+  label: string;
+  description?: string;
+  targetNode: Types.ObjectId;
+}
+
 export interface IStoryNode extends Document {
   _id: Types.ObjectId;
   chapter: Types.ObjectId;
 
-  /**
-   * Execution order within the chapter.
-   * Lower numbers appear first. Gaps are allowed (e.g. 10, 20, 30)
-   * so admins can insert nodes without reordering everything.
-   */
+  /** Display order - used for rendering the chapter map, NOT execution order */
   order: number;
 
   type: StoryNodeType;
 
   /**
-   * Ref to an existing Challenge document.
-   * Required when type === "challenge", null otherwise.
+   * True for the node(s) that start this chapter
+   * Every chapter must have exactly one entry point
    */
+
+  isEntryPoint: boolean;
+
   challenge?: Types.ObjectId;
 
-  /**
-   * Narrative content shown BEFORE the player attempts the challenge.
-   * Supports markdown. Think: mission briefing, character dialogue.
-   */
   preNarrative?: string;
-
-  /**
-   * Narrative content shown AFTER the player successfully solves the challenge.
-   * Think: character reaction, plot reveal, next clue teased.
-   */
   postNarrative?: string;
-
-  /**
-   * Character delivering the narrative (references IStoryCharacter.id).
-   * null = narrator / system message.
-   */
   characterId?: string;
 
   /**
-   * IDs of other StoryNodes in this chapter that must be completed
-   * before this node becomes available.
-   * Empty array = always available (first node, or parallel tracks).
+   * Graph edge for linear nodes (challenge, cutscene, briefing)
+   * null = this node is a terminal node (end of chapter or story branch).
+   */
+  nextNode?: Types.ObjectId;
+
+  /**
+   * Graph branches for choice nodes.
+   * Each option leads to a different targetNode within the same chapter.
+   * Mnimum 2 required for type === "choice".
+   */
+  choices: IStoryChoice[];
+
+  /**
+   * Prerequisite nodes - All must be completed before the node unlocks.
+   * Used for parallel tracks within a chapter (e.g. two challenges that can be done in any order, then both must be done to unlock a boss node).
+   * Different from `nextNode` - that's the default forward edge.
+   * This is an AND-gate: all listed nodes must be complete
    */
   unlockAfter: Types.ObjectId[];
 
-  /**
-   * Whether skipping this node is allowed.
-   * true = player can proceed without completing it (bonus/side-quest feel).
-   */
   isOptional: boolean;
-
-  /**
-   * Bonus XP awarded to the player when this node is completed,
-   * on top of the challenge's regular points.
-   * 0 = no bonus.
-   */
   xpBonus: number;
 
-  /**
-   * Cutscene / briefing markdown body. Only used when type !== "challenge".
-   */
+  /** Body for cutscene/briefing ndoes */
   content?: string;
-
-  /**
-   * For type === "choice": the options and which node each unlocks.
-   * Stored as plain objects — the story service resolves them.
-   */
-  choices?: {
-    label: string;
-    unlocksNode: Types.ObjectId;
-  }[];
 }
 
 export interface IStoryChapter extends Document {
   _id: Types.ObjectId;
   story: Types.ObjectId;
-
   title: string;
   slug: string;
-
-  /** Position within the story. Lower = earlier. */
   order: number;
-
-  /**
-   * Narrative shown when the chapter is first entered
-   * (chapter title card / scene-setter).
-   */
   openingNarrative?: string;
+  closingNarrative?: string;
+  coverImageUrl?: string;
+  accentColor?: string;
+  status: StoryStatus;
+  unlockAfterChapters: Types.ObjectId[];
+  estimatedMinutes?: number;
 
   /**
-   * Narrative shown after all required nodes in the chapter are complete.
+   * Cached reference to the entry point node.
+   * Set automatically when the chapter is published
+   * Speed up "start chapter" lookups without scanning all nodes
    */
-  closingNarrative?: string;
-
-  /** Background / cover image URL for the chapter card */
-  coverImageUrl?: string;
-
-  /** Hex accent colour for the chapter card */
-  accentColor?: string;
+  entryNodeId?: Types.ObjectId;
 
   nodes: IStoryNode[];
 
-  status: StoryStatus;
-
   /**
-   * IDs of chapters that must be completed before this one unlocks.
-   * Empty = always available (including the first chapter).
+   * Validate the chapter's node graph for integrity.
+   * Called before publish. Throws on any violation.
    */
-  unlockAfterChapters: Types.ObjectId[];
-
-  /** Estimated time to complete this chapter in minutes */
-  estimatedMinutes?: number;
+  validatePath(): {
+    valid: boolean;
+    errors: string[];
+  };
 }
 
 export interface IStory extends Document {
@@ -160,38 +136,17 @@ export interface IStory extends Document {
   slug: string;
   tagline?: string;
   description?: string;
-
   coverImageUrl?: string;
-
   accentColor?: string;
-
   difficulty: StoryDifficulty;
   status: StoryStatus;
-
-  /** Admin / author who created this story */
   author: Types.ObjectId;
-
-  /** Characters that appear throughout the story */
   characters: IStoryCharacter[];
-
   chapters: Types.ObjectId[];
-
-  /**
-   * Tags for discovery / filtering, e.g. ["osint", "pakistan", "terrorism"]
-   */
   tags: string[];
-
-  /**
-   * Bonus XP awarded when a player completes ALL non-optional nodes.
-   */
   completionXpBonus: number;
-
-  /** Total number of users who have fully completed the story */
   completionCount: number;
-
-  /** Estimated total time across all chapters in minutes */
   estimatedMinutes?: number;
-
   publishedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -224,12 +179,10 @@ const storyCharacterSchema = new mongoose.Schema<IStoryCharacter>(
       default: null,
     },
   },
-  {
-    _id: false,
-  }
+  { _id: false }
 );
 
-const storyChoiceSchema = new mongoose.Schema(
+const storyChoiceSchema = new mongoose.Schema<IStoryChoice>(
   {
     label: {
       type: String,
@@ -237,9 +190,15 @@ const storyChoiceSchema = new mongoose.Schema(
       trim: true,
       maxlength: [120, "Choice label cannot exceed 120 characters"],
     },
-    unlocksNode: {
+    description: {
+      type: String,
+      trim: true,
+      maxlength: [300, "Choice description cannot exceed 300 characters"],
+      default: null,
+    },
+    targetNode: {
       type: mongoose.Schema.Types.ObjectId,
-      required: [true, "Choice must unlock a node"],
+      required: [true, "Choice must have a target node"],
     },
   },
   {
@@ -272,6 +231,10 @@ const storyNodeSchema = new mongoose.Schema<IStoryNode>(
       },
       required: [true, "Node type is required"],
     },
+    isEntryPoint: {
+      type: Boolean,
+      default: false,
+    },
     challenge: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Challenge",
@@ -280,13 +243,13 @@ const storyNodeSchema = new mongoose.Schema<IStoryNode>(
     preNarrative: {
       type: String,
       trim: true,
-      maxlength: [5000, "Pre-narrative cannot exceed 5000 characters"],
+      maxlength: [5000, "Pre-narrative cannot exceed 5,000 characters"],
       default: null,
     },
     postNarrative: {
       type: String,
       trim: true,
-      maxlength: [5000, "Post-narrative cannot exceed 5000 characters"],
+      maxlength: [5000, "Post-narrative cannot exceed 5,000 characters"],
       default: null,
     },
     characterId: {
@@ -294,10 +257,17 @@ const storyNodeSchema = new mongoose.Schema<IStoryNode>(
       trim: true,
       default: null,
     },
+    nextNode: {
+      type: mongoose.Schema.Types.ObjectId,
+      default: null,
+    },
+    choices: {
+      type: [storyChoiceSchema],
+      default: [],
+    },
     unlockAfter: [
       {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "StoryNode",
       },
     ],
     isOptional: {
@@ -312,22 +282,14 @@ const storyNodeSchema = new mongoose.Schema<IStoryNode>(
     content: {
       type: String,
       trim: true,
-      maxlength: [10000, "Node content cannot exceed 10,000 characters"],
+      maxlength: [10000, "Node content exceed 10,000 characters"],
       default: null,
-    },
-    choices: {
-      type: [storyChoiceSchema],
-      default: [],
     },
   },
   {
     timestamps: true,
-    toJSON: {
-      virtuals: true,
-    },
-    toObject: {
-      virtuals: true,
-    },
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
   }
 );
 
@@ -335,7 +297,7 @@ const storyChapterSchema = new mongoose.Schema<IStoryChapter>(
   {
     story: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "story",
+      ref: "Story",
       required: true,
       index: true,
     },
@@ -358,13 +320,19 @@ const storyChapterSchema = new mongoose.Schema<IStoryChapter>(
     openingNarrative: {
       type: String,
       trim: true,
-      maxlength: [5000, "Opening narrative cannot exceed 5000 characters"],
+      maxlength: [
+        5000,
+        "Opening-narrative should not be more than 5000 words.",
+      ],
       default: null,
     },
     closingNarrative: {
       type: String,
       trim: true,
-      maxlength: [5000, "Closing narrative cannot exceed 5000 characters"],
+      maxlength: [
+        5000,
+        "Closing-narrative should not be more than 5000 words.",
+      ],
       default: null,
     },
     coverImageUrl: {
@@ -373,12 +341,8 @@ const storyChapterSchema = new mongoose.Schema<IStoryChapter>(
     },
     accentColor: {
       type: String,
-      match: [/^#[0-9a-fA-F]{6}$/, "accentColor must be a valid hex colour"],
+      match: [/^#[0-9a-fA-F]{6}$/, "Must be a valid hex colour"],
       default: null,
-    },
-    nodes: {
-      type: [storyNodeSchema],
-      default: [],
     },
     status: {
       type: String,
@@ -393,18 +357,22 @@ const storyChapterSchema = new mongoose.Schema<IStoryChapter>(
     ],
     estimatedMinutes: {
       type: Number,
-      min: [1, "Estimated minutes must be at least 1"],
+      min: 1,
       default: null,
+    },
+    entryNodeId: {
+      type: mongoose.Schema.Types.ObjectId,
+      default: null,
+    },
+    nodes: {
+      type: [storyNodeSchema],
+      default: [],
     },
   },
   {
     timestamps: true,
-    toJSON: {
-      virtuals: true,
-    },
-    toObject: {
-      virtuals: true,
-    },
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
   }
 );
 
@@ -430,33 +398,18 @@ const storySchema = new mongoose.Schema<IStory>(
       maxlength: [180, "Tagline cannot exceed 180 characters"],
       default: null,
     },
-    description: {
-      type: String,
-      trim: true,
-      maxlength: [10000, "Description cannot exceed 10,000 characters"],
-      default: null,
-    },
     coverImageUrl: {
       type: String,
       default: null,
     },
     accentColor: {
       type: String,
-      match: [/^#[0-9a-fA-F]{6}$/, "Must be a valid hex color"],
+      match: [/^#[0-9a-fA-F]{6}$/, "Must be a valid hex colour"],
       default: null,
     },
     difficulty: {
       type: String,
-      enum: {
-        values: [
-          "beginner",
-          "easy",
-          "medium",
-          "hard",
-          "insane",
-        ] satisfies StoryDifficulty[],
-        message: "Invalid difficulty {VALUE}",
-      },
+      enum: DIFFICULTY_LEVELS,
       default: "medium",
     },
     status: {
@@ -467,7 +420,7 @@ const storySchema = new mongoose.Schema<IStory>(
     author: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      required: [true, "Story must have an author"],
+      required: true,
     },
     characters: {
       type: [storyCharacterSchema],
@@ -484,7 +437,7 @@ const storySchema = new mongoose.Schema<IStory>(
         type: String,
         lowercase: true,
         trim: true,
-        maxlength: [30, "Tag cannot exceed 30 characters"],
+        maxlength: [30, "tag length must be less than 30"],
       },
     ],
     completionXpBonus: {
@@ -492,9 +445,14 @@ const storySchema = new mongoose.Schema<IStory>(
       default: 0,
       min: 0,
     },
+    completionCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
     estimatedMinutes: {
       type: Number,
-      min: 1,
+      min: [1, "Estimated minutes cannot be negative"],
       default: null,
     },
     publishedAt: {
@@ -513,7 +471,7 @@ const storySchema = new mongoose.Schema<IStory>(
   }
 );
 
-// indexes
+// Indexes
 
 storySchema.index({ status: 1, difficulty: 1 });
 storySchema.index({ slug: 1 });
@@ -525,11 +483,10 @@ storyChapterSchema.index({ story: 1, order: 1 });
 storyChapterSchema.index({ story: 1, status: 1 });
 
 storyNodeSchema.index({ chapter: 1, order: 1 });
-storyNodeSchema.index({ challenge: 1 }); // find all nodes using a challenge
+storyNodeSchema.index({ challenge: 1 });
 
-// pre save hooks
+// Pre-save hooks
 
-/** Auto-generate story slug from title */
 storySchema.pre("save", function (this: IStory) {
   if (this.isModified("title") && !this.slug) {
     const base = this.title
@@ -539,12 +496,10 @@ storySchema.pre("save", function (this: IStory) {
       .replace(/\s+/g, "-")
       .replace(/-+/g, "-")
       .substring(0, 80);
-
     this.slug = `${base}-${this._id.toString().slice(-6)}`;
   }
 });
 
-/** Stamp publishedAt when story is first published */
 storySchema.pre("save", function (this: IStory) {
   if (
     this.isModified("status") &&
@@ -555,18 +510,16 @@ storySchema.pre("save", function (this: IStory) {
   }
 });
 
-/** Validate character IDs are unique within a story */
 storySchema.pre("validate", function (this: IStory) {
   const ids = this.characters.map((c) => c.id);
   if (new Set(ids).size !== ids.length) {
     this.invalidate(
-      "characters",
+      "Characters",
       "Character ids must be unique within a story"
     );
   }
 });
 
-/** Auto-generate chapter slug from title */
 storyChapterSchema.pre("save", function (this: IStoryChapter) {
   if (this.isModified("title") && !this.slug) {
     this.slug = this.title
@@ -578,24 +531,213 @@ storyChapterSchema.pre("save", function (this: IStoryChapter) {
   }
 });
 
-/** challenge field is required when type === "challenge" */
-storyNodeSchema.pre("validate", function (this: IStoryNode) {
-  if (this.type === "challenge" && !this.challenge) {
-    this.invalidate(
-      "challenge",
-      "A challenge reference is required for nodes of type 'challenge'"
+// Chapter Graph Validation Method
+
+/**
+ * Validates the node graph within a chapter before publishing.
+ *
+ * Rules enforced:
+ *   1. Exactly one entry point node
+ *   2. All nextNode references point to nodes within this chapter
+ *   3. All choice.targetNode references point to nodes within this chapter
+ *   4. All unlockAfter references point to nodes within this chapter
+ *   5. No cycles in the graph (DFS cycle detection)
+ *   6. All nodes are reachable from the entry point
+ *   7. Choice nodes have at least 2 choices
+ *   8. Challenge nodes have a challenge reference
+ *   9. Non-challenge nodes have content or preNarrative
+ */
+
+storyChapterSchema.methods.validateGraph = function (this: IStoryChapter): {
+  valid: boolean;
+  errors: string[];
+} {
+  const errors: string[] = [];
+  const nodes = this.nodes;
+  const nodeIds = new Set(nodes.map((n) => n._id.toString()));
+
+  // Rule 1: Exactly one entry point
+  const entryPoints = nodes.filter((n) => n.isEntryPoint);
+
+  if (entryPoints.length === 0) {
+    errors.push("Chapter must have exactly one entry point node");
+  } else if (entryPoints.length > 1) {
+    errors.push(
+      `Chapter has ${entryPoints.length} entry points - only one is allowed`
     );
   }
-  if (this.type === "choice" && (!this.choices || this.choices.length < 2)) {
-    this.invalidate("choices", "Choice nodes must have at least 2 options");
+
+  // Per-node validations
+  for (const node of nodes) {
+    const label = `Node [order=${node.order}, type=${node.type}]`;
+
+    // challenge ref
+    if (node.type === "challenge" && !node.challenge) {
+      errors.push(`${label}: challenge reference is required`);
+    }
+
+    // content or preNarrative for non-challenge nodes
+    if (node.type !== "challenge" && !node.content && !node.preNarrative) {
+      errors.push(`${label}: must have content or preNarrative`);
+    }
+
+    // Choice nodes
+    if (node.type === "choice") {
+      if (node.choices.length < 2) {
+        errors.push(`${label}: choice nodes must have at least 2 options`);
+      }
+      if (node.nextNode) {
+        errors.push(`
+          ${label}: choice nodes must not have nextNode - use choices[].targetNode instead`);
+      }
+    }
+
+    // each choice target must exist
+    for (const choice of node.choices) {
+      if (!nodeIds.has(choice.targetNode.toString())) {
+        errors.push(
+          `${label}: choice "${choice.label}" targets unknown node ${choice.targetNode}`
+        );
+      }
+    }
+
+    // Next node must exist within chapter
+    if (node.nextNode && !nodeIds.has(node.nextNode.toString())) {
+      errors.push(
+        `${label}: nextNode ${node.nextNode} does not exist1 in this chapter`
+      );
+    }
+
+    // Unlock after refs
+    for (const prereq of node.unlockAfter) {
+      if (!nodeIds.has(prereq.toString())) {
+        errors.push(`${label}: unlockAfter references unknown node ${prereq}`);
+      }
+    }
   }
-  if (this.type !== "challenge" && !this.content && !this.preNarrative) {
-    this.invalidate(
-      "content",
-      "Non-challenge nodes must have content or preNarrative"
+
+  if (errors.length > 0) {
+    return { valid: false, errors };
+  }
+
+  // Cycle detection (DFS)
+
+  // Build adjacency list from all forward edges
+  const adjacency = new Map<string, string[]>();
+
+  for (const node of nodes) {
+    const id = node._id.toString();
+    const edges: string[] = [];
+
+    if (node.nextNode) {
+      edges.push(node.nextNode.toString());
+    }
+
+    for (const c of node.choices) {
+      edges.push(c.targetNode.toString());
+    }
+
+    adjacency.set(id, edges);
+  }
+
+  const WHITE = 0;
+  const GRAY = 1;
+  const BLACK = 2;
+
+  const color = new Map<string, number>();
+
+  for (const id of nodeIds) {
+    color.set(id, WHITE);
+  }
+
+  const cycleDetected: string[] = [];
+
+  function dfs(id: string, path: string[]): boolean {
+    color.set(id, GRAY);
+
+    for (const neighbour of adjacency.get(id) ?? []) {
+      if (color.get(neighbour) === GRAY) {
+        cycleDetected.push(
+          `Cycle detected: ${[...path, id, neighbour].join("-> ")}`
+        );
+        return true;
+      }
+      if (color.get(neighbour) === WHITE) {
+        if (dfs(neighbour, [...path, id])) {
+          return true;
+        }
+      }
+    }
+
+    color.set(id, BLACK);
+    return false;
+  }
+
+  for (const id of nodeIds) {
+    if (color.get(id) === WHITE) {
+      if (dfs(id, [])) {
+        break;
+      }
+    }
+  }
+
+  if (cycleDetected.length > 0) {
+    errors.push(...cycleDetected);
+    return {
+      valid: false,
+      errors,
+    };
+  }
+
+  // Reachability from entry point
+  if (entryPoints.length === 1) {
+    const entryId = entryPoints[0]._id.toString();
+    const visited = new Set<string>();
+
+    function bfs(startId: string) {
+      const queue = [startId];
+
+      while (queue.length > 0) {
+        const current = queue.shift()!;
+        if (visited.has(current)) continue;
+        visited.add(current);
+
+        for (const neighbour of adjacency.get(current) ?? []) {
+          if (!visited.has(neighbour)) {
+            queue.push(neighbour);
+          }
+        }
+
+        // Also traverse unlockAfter edges (they can be reached if prerequisites are met)
+        const node = nodes.find((n) => n._id.toString() === current);
+
+        for (const prereq of node?.unlockAfter ?? []) {
+          // Don't mark as unreachable - they're rechable one prereqs done
+        }
+      }
+    }
+
+    bfs(entryId);
+
+    // Only non-optional required nodes matter for reachability
+    const unreachable = nodes.filter(
+      (n) =>
+        !n.isOptional &&
+        !visited.has(n._id.toString()) &&
+        n.unlockAfter.length === 0
     );
+
+    if (unreachable.length > 0) {
+      for (const n of unreachable) {
+        errors.push(
+          `Node [order=${n.order}] is not reachable from the entry point and has no prerequisites - all required nodes must be reachable`
+        );
+      }
+    }
   }
-});
+
+  return { valid: errors.length === 0, errors };
+};
 
 // Models
 
