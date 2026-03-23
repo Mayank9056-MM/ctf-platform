@@ -34,3 +34,10 @@ export const DIFFICULTY_SORT_ORDER: Record<ChallengeDifficulty, number> = {
   hard: 3,
   insane: 4,
 };
+
+export const DIFFICULTY_LEVELS: ChallengeDifficulty[] = [
+  "easy",
+  "medium",
+  "hard",
+  "insane",
+];
