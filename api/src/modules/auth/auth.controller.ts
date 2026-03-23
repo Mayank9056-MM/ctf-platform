@@ -146,7 +146,6 @@ const logout = asyncHandler(async (req, res) => {
     secure: process.env.NODE_ENV === "production",
   };
 
-  // In logout controller, before clearing cookies
   const accessToken = req.cookies?.accessToken;
   if (accessToken) {
     const decoded = jwt.decode(accessToken) as { exp: number };
