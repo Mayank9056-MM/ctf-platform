@@ -91,12 +91,14 @@ import authRouter from "./modules/auth/auth.routes";
 import teamRouter from "./modules/teams/team.route";
 import challengeRouter from "./modules/challenges/challenge.routes";
 import adminRouter from "./modules/admin/admin.routes";
+import storyRouter from "./modules/story/story.routes";
 
 // routes
 app.use("/api/v1/auth", authRouter);
 app.use("/api/v1/team", teamRouter);
 app.use("/api/v1/challenges", challengeRouter);
 app.use("/api/v1/admin", adminRouter);
+app.use("/api/v1/story", storyRouter);
 
 // It should be always at bottom
 // 404 handler
