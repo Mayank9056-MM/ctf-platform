@@ -1,30 +1,22 @@
-import mongoose, { Types, Document } from "mongoose";
+import mongoose, { mongo, Types } from "mongoose";
 
-// Enums
-
-export type StoryProgressStatus =
-  | "not_started"
-  | "in_progress"
-  | "completed"
-  | "abandoned";
-
-// sub docuement interfaces
+export type StoryProgressSchema = "in_progress" | "completed" | "abandoned";
 
 export interface ICompletedNode {
   nodeId: Types.ObjectId;
-
-  /** The Challenge _id that was solved (null for cutscene/briefing nodes) */
   challengeId?: Types.ObjectId;
   completedAt: Date;
-
-  /** Points earned from the underlying challenge solve */
   pointsEarned: number;
-
-  /** Bonus XP from the node's xpBonus field */
   xpBonus: number;
-
-  /** Number of attempts before the correct flag (challege nodes only) */
   attempts: number;
+}
+
+export interface IChoiceMade {
+  nodeId: Types.ObjectId;
+  choiceLabel: string;
+  /** The node the player was routed to as a result of this choice */
+  routedToNodeId: Types.ObjectId;
+  madeAt: Date;
 }
 
 export interface ICompletedChapter {
@@ -32,53 +24,45 @@ export interface ICompletedChapter {
   completedAt: Date;
 }
 
-// Main interface
-
 export interface IUserStoryProgress extends Document {
   user: Types.ObjectId;
   story: Types.ObjectId;
+  status: StoryProgressSchema;
 
-  status: StoryProgressStatus;
+  /** Poninter into the graph - where the player is RIGHT NOW */
+  currentChapterId: Types.ObjectId;
+  currentNodeId: Types.ObjectId;
 
-  /** Chapter the user is currently on */
-  currentChapterId?: Types.ObjectId;
+  /**
+   * The active graph path - ordered list of node IDs the player has traversed. When a choice is made, nodes that were on the "other" branch are never added here.
+   */
+  activePath: Types.ObjectId[];
 
-  /** Node the user is currently on within currentChapterId */
-  currentNodeId?: Types.ObjectId;
-
+  /**
+   * Set of all completed node IDs (regardless of branch).
+   * User for prerequisite checks (unlockAfter)
+   */
   completedNodes: ICompletedNode[];
+
+  /**
+   * Set of bypassed node IDs - nodes that were on a branch the player did NOT take. Tracked so we don't block story completion on them.
+   */
+  bypassedNodeIds: Types.ObjectId;
+
   completedChapters: ICompletedChapter[];
 
-  /** Running total XP (challenge points + xpBonus) earned in this story */
+  /**
+   * Every choice made by the player provides full branch history for analytics and replay
+   */
+  choiceMade: IChoiceMade[];
+
   totalXpEarned: number;
-
-  /** Wall-clock time the user started the story */
   startedAt: Date;
-
-  /** Wall-clock time the user completed all required nodes */
   completedAt?: Date;
-
-  /**
-   * Running elapsed play time in seconds
-   * Updated each time a node is completed
-   */
   playTimeSeconds: number;
-
-  /**
-   * Set when the user makes a choice at a choice node.
-   * Maps nodeId -> chosen option label for replay / analytics
-   */
-  choicesMade: {
-    nodeId: Types.ObjectId;
-    choiceLabel: string;
-    madeAt: Date;
-  }[];
 
   createdAt: Date;
   updatedAt: Date;
-
-  lastNodeStartedAt: Date;
-  restarts: number;
 }
 
 // Schema
@@ -87,7 +71,6 @@ const completedNodeSchema = new mongoose.Schema<ICompletedNode>(
   {
     nodeId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "StoryNode",
       required: [true, "Node id is required"],
     },
     challengeId: {
@@ -120,31 +103,20 @@ const completedNodeSchema = new mongoose.Schema<ICompletedNode>(
   }
 );
 
-const completedChapterSchema = new mongoose.Schema<ICompletedChapter>(
-  {
-    chapterId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "StoryChapter",
-      required: [true, "Chapter id is required"],
-    },
-    completedAt: {
-      type: Date,
-      default: Date.now,
-    },
-  },
-  { _id: false }
-);
-
-const choiceMadeSchema = new mongoose.Schema(
+const choiceMadeSchema = new mongoose.Schema<IChoiceMade>(
   {
     nodeId: {
-      type: mongoose.Types.ObjectId,
+      type: mongoose.Schema.Types.ObjectId,
       required: [true, "Node id is required"],
     },
     choiceLabel: {
       type: String,
-      required: true,
+      required: [true, "Choice label is required"],
       trim: true,
+    },
+    routedToNodeId: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: [true, "Routed to node id is required"],
     },
     madeAt: {
       type: Date,
@@ -154,49 +126,70 @@ const choiceMadeSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const completedChapterSchema = new mongoose.Schema<ICompletedChapter>(
+  {
+    chapterId: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: true,
+    },
+    completedAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  {
+    _id: false,
+  }
+);
+
 const userStoryProgressSchema = new mongoose.Schema<IUserStoryProgress>(
   {
     user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      required: [true, "Progress must belong to a user"],
+      required: [true, "User is required"],
       index: true,
     },
     story: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Story",
-      required: [true, "Progress must reference a story"],
+      required: [true, "Story is required"],
       index: true,
     },
     status: {
       type: String,
-      enum: {
-        values: [
-          "not_started",
-          "in_progress",
-          "completed",
-          "abandoned",
-        ] satisfies StoryProgressStatus[],
-        message: "Invalid status: {VALUE}",
-      },
+      enum: ["in_progress", "completed", "abandoned"],
       default: "in_progress",
     },
     currentChapterId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "StoryChapter",
-      default: null,
+      required: true,
     },
     currentNodeId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "StoryNode",
-      default: null,
+      required: [true, "Current node id is required"],
     },
+    activePath: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+      },
+    ],
     completedNodes: {
       type: [completedNodeSchema],
       default: [],
     },
+    bypassedNodeIds: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+      },
+    ],
     completedChapters: {
       type: [completedChapterSchema],
+      default: [],
+    },
+    choiceMade: {
+      type: [choiceMadeSchema],
       default: [],
     },
     totalXpEarned: {
@@ -217,18 +210,6 @@ const userStoryProgressSchema = new mongoose.Schema<IUserStoryProgress>(
       default: 0,
       min: 0,
     },
-    choicesMade: {
-      type: [choiceMadeSchema],
-      default: [],
-    },
-    lastNodeStartedAt: {
-      type: Date,
-      default: null,
-    },
-    restarts: {
-      type: Number,
-      default: 0,
-    },
   },
   {
     timestamps: true,
@@ -237,24 +218,13 @@ const userStoryProgressSchema = new mongoose.Schema<IUserStoryProgress>(
   }
 );
 
-// Indexes
-
-// One progress document per user per story
 userStoryProgressSchema.index(
   { user: 1, story: 1 },
   { unique: true, name: "unique_user_story_progress" }
 );
-
 userStoryProgressSchema.index({ story: 1, status: 1 });
-userStoryProgressSchema.index({ story: 1, totalXpEarned: -1 }); // story leaderboard
+userStoryProgressSchema.index({ story: 1, totalXpEarned: -1 });
 
-// virtuals
-
-userStoryProgressSchema.virtual("requiredNodesCompleted").get(function () {
-  return this.completedNodes.length;
-});
-
-/** Formatted play time as "Xh Ym" */
 userStoryProgressSchema.virtual("playTimeFormatted").get(function () {
   const h = Math.floor(this.playTimeSeconds / 3600);
   const m = Math.floor((this.playTimeSeconds % 3600) / 60);
