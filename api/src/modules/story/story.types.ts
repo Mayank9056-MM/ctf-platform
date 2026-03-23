@@ -2,7 +2,6 @@ import { Types } from "mongoose";
 import {
   StoryDifficulty,
   StoryNodeType,
-  StoryChapter,
   StoryStatus,
 } from "../../models/story.model";
 
@@ -12,6 +11,7 @@ export type CreateStoryPayload = {
   title: string;
   tagline?: string;
   description?: string;
+  difficulty?: StoryDifficulty;
   tags?: string[];
   coverImageUrl?: string;
   accentColor?: string;
@@ -37,7 +37,7 @@ export type CreateChapterPayload = {
   closingNarrative?: string;
   coverImageUrl?: string;
   accentColor?: string;
-  estimatedMinutes?: string;
+  estimatedMinutes?: number;
   unlockAfterChapters?: string[];
   requesterId: Types.ObjectId;
 };
@@ -47,7 +47,7 @@ export type UpdateChapterPayload = Partial<
 > & {
   chapterId: string;
   storyId: string;
-  requesterid: Types.ObjectId;
+  requesterId: Types.ObjectId;
 };
 
 // Node CRUD
@@ -57,19 +57,23 @@ export type CreateNodePayload = {
   storyId: string;
   type: StoryNodeType;
   order: number;
-  /** Required when type === "challenge" */
+  isEntryPoint?: boolean;
   challengeId?: string;
   preNarrative?: string;
   postNarrative?: string;
   characterId?: string;
+  /** For linear nodes: which node comes next in the graph */
+  nextNode?: string;
+  /**
+   * For choice nodes: each option and the node it routes to.
+   * targetNode must reference a node in the same chapter.
+   */
+  choices?: { label: string; description?: string; targetNode: string }[];
+  /** AND-gate prerequisites: all must be complete before this node unlocks */
   unlockAfter?: string[];
-  isOptional: boolean;
+  isOptional?: boolean;
   xpBonus?: number;
   content?: string;
-  choices?: {
-    label: string;
-    unlocksNode: string;
-  }[];
   requesterId: Types.ObjectId;
 };
 
@@ -88,16 +92,11 @@ export type StartStoryPayload = {
   userId: Types.ObjectId;
 };
 
-export type CompleteNodePayload = {
+export type AdvanceNodePayload = {
   storyId: string;
   chapterId: string;
   nodeId: string;
   userId: Types.ObjectId;
-
-  pointsEarned?: number;
-  attempts?: number;
-
-  choiceLabel?: string;
   elapsedSeconds?: number;
 };
 
@@ -109,34 +108,70 @@ export type MakeChoicePayload = {
   choiceLabel: string;
 };
 
+/**
+ * Internal payload used by _commitNodeCompletion transaction.
+ * Not exposed to controllers.
+ */
+export type CommitNodePayload = {
+  storyId: string;
+  chapterId: string;
+  nodeId: string;
+  userId: Types.ObjectId;
+  pointsEarned: number;
+  attempts: number;
+  elapsedSeconds: number;
+  /** Populated for choice nodes */
+  choiceLabel?: string;
+  /** The node the graph routes to after this one (null if terminal) */
+  resolvedNextNodeId?: string | null;
+  /** Node IDs on branches NOT taken (for bypassing) */
+  bypassedNodeIds?: string[];
+};
+
 // Response Shapes
+
+export type NodeCompleteResult = {
+  nodeId: string;
+  xpBonus: number;
+  /** postNarrative to show the player after completion */
+  postNarrative: string | null;
+  /** Where the player goes next */
+  nextNodeId: string | null;
+  nextChapterId: string | null;
+  /** True if ALL required nodes in the chapter are now done */
+  chapterCompleted: boolean;
+  /** True if the entire story is now complete */
+  storyCompleted: boolean;
+  /** Bonus XP for finishing the whole story */
+  completionXpBonus: number;
+  totalXpEarned: number;
+};
 
 export type StoryProgressView = {
   storyId: string;
   status: string;
-  currentChapterId?: string;
-  currentNodeId?: string;
+  currentChapterId: string;
+  currentNodeId: string;
   completedNodeIds: string[];
-  completedChapterIds: string[];
+  bypassedNodeIds: string[];
+  activePath: string[];
   totalXpEarned: number;
   playTimeSeconds: number;
   playTimeFormatted: string;
-  unlockedNodeIds: string[];
+  choicesMade: {
+    nodeId: string;
+    choiceLabel: string;
+    routedToNodeId: string;
+    madeAt: Date;
+  }[];
 };
 
-export type CompleteNodeResult = {
-  nodeId: string;
-  xpBonus: number;
-  chapterCompleted: boolean;
-  storyCompleted: boolean;
-  completionXpBonus: number;
-  nextNodeId?: string;
-  nextChapterId?: string;
-  postNarrative?: string;
-  totalXpEarned: number;
+export type GraphValidationResult = {
+  valid: boolean;
+  errors: string[];
 };
 
-/// Admin filters
+// Filters
 
 export type StoryFilters = {
   status?: StoryStatus;
