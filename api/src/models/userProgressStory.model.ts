@@ -47,7 +47,7 @@ export interface IUserStoryProgress extends Document {
   /**
    * Set of bypassed node IDs - nodes that were on a branch the player did NOT take. Tracked so we don't block story completion on them.
    */
-  bypassedNodeIds: Types.ObjectId;
+  bypassedNodeIds: Types.ObjectId[];
 
   completedChapters: ICompletedChapter[];
 
