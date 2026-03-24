@@ -93,11 +93,7 @@ export const adminUpdateUserSchema = z
       )
       .optional(),
 
-    email: z
-      .string()
-      .email("Must be a valid email address")
-      .toLowerCase()
-      .optional(),
+    email: z.email("Must be a valid email address").toLowerCase().optional(),
 
     score: z
       .number()
@@ -184,16 +180,6 @@ export const createAdminSchema = z.object({
     .string()
     .max(100, "Full name must be under 100 characters")
     .trim()
-    .optional(),
-
-  username: z
-    .string()
-    .min(3, "Username must be at least 3 characters")
-    .max(30, "Username must be under 30 characters")
-    .regex(
-      /^[a-zA-Z0-9_-]+$/,
-      "Username can only contain letters, numbers, underscores and hyphens"
-    )
     .optional(),
 
   role: z

@@ -17,6 +17,7 @@ import { ApiError } from "../../utils/ApiError";
 import { ApiResponse } from "../../utils/ApiResponse";
 import { storyService } from "./story.service";
 import Story from "../../models/story.model";
+import { parseBody } from "../../utils/helpers";
 
 // Helpers
 
@@ -34,19 +35,14 @@ function buildMeta(page: number, limit: number, total: number) {
 // Player Controllers
 
 const getStories = asyncHandler(async (req, res) => {
-  const parsed = storyFiltersSchema.safeParse(req.query);
-  if (!parsed.success)
-    throw new ApiError(
-      400,
-      parsed.error.message || "something went wrong while parsing story filters"
-    );
+  const data = parseBody(storyFiltersSchema, req.query);
 
   const isAdmin = req.user && ["admin", "superadmin"].includes(req.user.role);
   if (!isAdmin) {
-    parsed.data.status = "published";
+    data.status = "published";
   }
 
-  const result = await storyService.getStories(parsed.data, req.user?._id);
+  const result = await storyService.getStories(data, req.user?._id);
 
   if (!result) {
     throw new ApiError(500, "Something went wrong while getting stories");
@@ -137,18 +133,14 @@ const advanceNode = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Missing id, nodeId, or chapterId");
   }
 
-  const parsed = advanceNodeSchema.safeParse(req.body);
-
-  if (!parsed.success) {
-    throw new ApiError(400, parsed.error.message);
-  }
+  const data = parseBody(advanceNodeSchema, req.body);
 
   const result = await storyService.advanceNode({
     storyId: id,
     chapterId: chapterId,
     nodeId: nodeId,
     userId: req.user!._id,
-    elapsedSeconds: parsed.data.elapsedSeconds,
+    elapsedSeconds: data.elapsedSeconds,
   });
 
   if (!result) {
@@ -171,18 +163,14 @@ const makeChoice = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Missing id, nodeId, or chapterId");
   }
 
-  const parsed = makeChoiceSchema.safeParse(req.body);
-
-  if (!parsed.success) {
-    throw new ApiError(400, parsed.error.message);
-  }
+  const data = parseBody(makeChoiceSchema, req.body);
 
   const result = await storyService.makeChoice({
     storyId: storyId,
     chapterId: chapterId,
     nodeId: nodeId,
     userId: req.user!._id,
-    choiceLabel: parsed.data.choiceLabel,
+    choiceLabel: data.choiceLabel,
   });
 
   if (!result) {
@@ -195,7 +183,7 @@ const makeChoice = asyncHandler(async (req, res) => {
       new ApiResponse(
         200,
         result,
-        `Choice "${parsed.data.choiceLabel}" recorded. Story continues...`
+        `Choice "${data.choiceLabel}" recorded. Story continues...`
       )
     );
 });
@@ -225,14 +213,10 @@ const getLeaderboard = asyncHandler(async (req, res) => {
 // Admin: Story Controllers
 
 const adminCreateStory = asyncHandler(async (req, res) => {
-  const parsed = createStorySchema.safeParse(req.body);
-
-  if (!parsed.success) {
-    throw new ApiError(400, parsed.error.message);
-  }
+  const data = parseBody(createStorySchema, req.body);
 
   const story = await storyService.createStory({
-    ...parsed.data,
+    ...data,
     authorId: req.user!._id,
   });
 
@@ -250,16 +234,12 @@ const adminUpdateStory = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Missing id");
   }
 
-  const parsed = updateStorySchema.safeParse(req.body);
-
-  if (!parsed.success) {
-    throw new ApiError(400, parsed.error.message);
-  }
+  const data = parseBody(updateStorySchema, req.body);
 
   const story = await storyService.updateStory({
     storyId: id,
     requesterId: req.user!._id,
-    ...parsed.data,
+    ...data,
   } as Parameters<typeof storyService.updateStory>[0]);
 
   if (!story) {
@@ -276,13 +256,9 @@ const adminSetStoryStatus = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Missing id");
   }
 
-  const parsed = setStoryStatusSchema.safeParse(req.body);
+  const data = parseBody(setStoryStatusSchema, req.body);
 
-  if (!parsed.success) {
-    throw new ApiError(400, parsed.error.message);
-  }
-
-  const story = await storyService.setStoryStatus(id, parsed.data.status);
+  const story = await storyService.setStoryStatus(id, data.status);
 
   if (!story) {
     throw new ApiError(500, "Something went wrong while setting story status");
@@ -290,7 +266,7 @@ const adminSetStoryStatus = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .json(new ApiResponse(200, story, `Story is now ${parsed.data.status}`));
+    .json(new ApiResponse(200, story, `Story is now ${data.status}`));
 });
 
 const adminDeleteStory = asyncHandler(async (req, res) => {
@@ -311,23 +287,16 @@ const adminAddCharacter = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Missing id");
   }
 
-  const parsed = addCharacterSchema.safeParse(req.body);
-
-  if (!parsed.success) {
-    throw new ApiError(400, parsed.error.message);
-  }
+  const data = parseBody(addCharacterSchema, req.body);
 
   const story = await Story.findById(id);
 
   if (!story) throw new ApiError(400, "Story not found");
 
-  if (story.characters.some((c) => c.id === parsed.data.id)) {
-    throw new ApiError(
-      409,
-      `Character with id "${parsed.data.id}" already exists`
-    );
+  if (story.characters.some((c) => c.id === data.id)) {
+    throw new ApiError(409, `Character with id "${data.id}" already exists`);
   }
-  story.characters.push(parsed.data);
+  story.characters.push(data);
 
   await story.save({ validateBeforeSave: false });
 
@@ -363,13 +332,7 @@ const adminCreateChapter = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Missing id");
   }
 
-  const parsed = createChapterSchema.safeParse(req.body);
-
-  if (!parsed.success) {
-    throw new ApiError(400, parsed.error.message);
-  }
-
-  const data = parsed.data;
+  const data = parseBody(createChapterSchema, req.body);
 
   const chapter = await storyService.createChapter({
     ...data,
@@ -467,13 +430,7 @@ const adminDeleteChapter = asyncHandler(async (req, res) => {
 });
 
 const adminCreateNode = asyncHandler(async (req, res) => {
-  const parsed = createNodeSchema.safeParse(req.body);
-
-  if (!parsed.success) {
-    throw new ApiError(400, parsed.error.message);
-  }
-
-  const data = parsed.data;
+  const data = parseBody(createNodeSchema, req.body);
 
   const chapter = await storyService.createNode({
     ...(data as Record<string, unknown>),
@@ -496,13 +453,7 @@ const adminUpdateNode = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Missing nodeId or chapterId");
   }
 
-  const parsed = updateNodeSchema.safeParse(req.body);
-
-  if (!parsed.success) {
-    throw new ApiError(400, parsed.error.message);
-  }
-
-  const data = parsed.data;
+  const data = parseBody(updateNodeSchema, req.body);
 
   const chapter = await storyService.updateNode({
     ...(data as Record<string, unknown>),
