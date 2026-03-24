@@ -1124,20 +1124,17 @@ class StoryService {
     }
 
     const session = await mongoose.startSession();
-    session.startTransaction();
 
     try {
-      await Promise.all([
-        Story.findByIdAndDelete(storyId, { session }),
-        StoryChapter.deleteMany({ story: storyId }, { session }),
-        UserStoryProgress.deleteMany({ story: storyId }, { session }),
-      ]);
-      await session.commitTransaction();
-    } catch (err) {
-      await session.abortTransaction();
-      throw err;
+      await session.withTransaction(async () => {
+        await Story.findByIdAndDelete(storyId).session(session);
+
+        await StoryChapter.deleteMany({ story: storyId }).session(session);
+
+        await UserStoryProgress.deleteMany({ story: storyId }).session(session);
+      });
     } finally {
-      session.endSession();
+      await session.endSession();
     }
   }
 
