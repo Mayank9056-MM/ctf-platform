@@ -65,9 +65,9 @@ export const adminSubmissionFilterSchema = z
     from: isoDate.optional(),
     to: isoDate.optional(),
     sortBy: z
-      .enum(["createdAd", "pointsAwarded"])
+      .enum(["createdAt", "pointsAwarded"])
       .optional()
-      .default("createdAd"),
+      .default("createdAt"),
     sortOrder: z.enum(["asc", "desc"]).optional().default("desc"),
   })
   .refine(
