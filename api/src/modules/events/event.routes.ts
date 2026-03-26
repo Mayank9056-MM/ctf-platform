@@ -69,3 +69,5 @@ eventRouter.get("/:idOrSlug", optionalAuth, getEventDetail);
 eventRouter.post("/:id/register", verifyAuth, registerForEvent);
 eventRouter.get("/:id/leaderboard", getEventLeaderboard);
 eventRouter.get("/:id/stats", getEventStats);
+
+export default eventRouter;
