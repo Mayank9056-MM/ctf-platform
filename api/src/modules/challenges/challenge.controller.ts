@@ -5,7 +5,6 @@ import {
   challengeFilterSchema,
   createChallengeSchema,
   purchaseHintSchema,
-  submitFlagSchema,
   updateChallengeSchema,
 } from "./challenge.validator";
 import { ApiError } from "../../utils/ApiError";
@@ -21,7 +20,7 @@ import {
   embedFlagInImage,
   extractFlagFromImage,
   isSupportedImage,
-} from "../../config/imgeFlag";
+} from "../../config/imageFlag";
 import path from "node:path";
 import { parseBody } from "../../utils/helpers";
 
@@ -105,35 +104,6 @@ const getChallengeDetail = asyncHandler(async (req, res) => {
   return res
     .status(200)
     .json(new ApiResponse(200, challenge, "Challenge retrieved successfully"));
-});
-
-const submitFlag = asyncHandler(async (req, res) => {
-  const id = req.params.id as string;
-
-  if (!id) {
-    throw new ApiError(400, "Challenge id is required");
-  }
-
-  const data = parseBody(submitFlagSchema, req.body);
-
-  const result = await challengeService.submitFlag({
-    userId: req.user!._id,
-    teamId: req.user?.teamId,
-    challengeId: id,
-    flag: data.flag,
-    ip: getIp(req),
-    userAgent: req.headers["user-agent"],
-  });
-
-  if (!result) {
-    throw new ApiError(404, "Challenge not found");
-  }
-
-  const statusCode = result.isCorrect ? 200 : 400;
-
-  return res
-    .status(statusCode)
-    .json(new ApiResponse(statusCode, result, result.message));
 });
 
 const purchaseHint = asyncHandler(async (req, res) => {
@@ -694,7 +664,6 @@ const adminGetSubmissions = asyncHandler(async (req, res) => {
 export {
   getChallenges,
   getChallengeDetail,
-  submitFlag,
   purchaseHint,
   getChallengeSolves,
   adminGetChallenges,

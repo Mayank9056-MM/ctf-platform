@@ -36,10 +36,6 @@ export type UpdateChallengeInput = {
   isHosted?: boolean;
 };
 
-export type SubmitFlagInput = {
-  flag: string;
-};
-
 export type PurchaseHintInput = {
   hintIndex: number;
 };
@@ -75,15 +71,6 @@ export type CreateChallengePayload = CreateChallengeInput & {
   authorId: Types.ObjectId;
 };
 
-export type SubmitFlagPayload = {
-  userId: Types.ObjectId;
-  teamId?: Types.ObjectId;
-  challengeId: string;
-  flag: string;
-  ip: string;
-  userAgent?: string;
-};
-
 export type challengeFilters = {
   category?: ChallengeCategory;
   difficulty?: ChallengeDifficulty;
@@ -96,14 +83,6 @@ export type challengeFilters = {
 };
 
 // Response Types
-
-export type SubmitFlagResult = {
-  isCorrect: boolean;
-  pointsAwarded: number;
-  isFirstBlood: boolean;
-  message: string;
-  newScore?: number;
-};
 
 export type purchasedHintResult = {
   hintText: string;

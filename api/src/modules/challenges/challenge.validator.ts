@@ -217,12 +217,6 @@ export const updateChallengeSchema = z
     }
   );
 
-// Submit flag
-
-export const submitFlagSchema = z.object({
-  flag: flagField,
-});
-
 // Purchase hint
 
 export const purchaseHintSchema = z.object({
