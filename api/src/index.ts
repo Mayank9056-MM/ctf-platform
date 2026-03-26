@@ -94,6 +94,7 @@ import adminRouter from "./modules/admin/admin.routes";
 import storyRouter from "./modules/story/story.routes";
 import submissionRouter from "./modules/submissions/submission.route";
 import eventRouter from "./modules/events/event.routes";
+import notificationRouter from "./modules/notification/notification.routes";
 
 // routes
 app.use("/api/v1/auth", authRouter);
@@ -103,6 +104,7 @@ app.use("/api/v1/admin", adminRouter);
 app.use("/api/v1/story", storyRouter);
 app.use("/api/v1/submission", submissionRouter);
 app.use("/api/v1/event", eventRouter);
+app.use("/api/v1/notification", notificationRouter);
 
 // It should be always at bottom
 // 404 handler
