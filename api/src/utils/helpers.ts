@@ -58,3 +58,21 @@ export function parseBody<T>(schema: z.ZodSchema<T>, body: unknown): T {
 
   return result.data;
 }
+
+/**
+ * Builds a pagination meta object.
+ * @param {number} page - The current page number.
+ * @param {number} limit - The number of items per page.
+ * @param {number} total - The total number of items.
+ * @returns {object} An object containing the page, limit, total, totalPages, hasNext, and hasPrev.
+ */
+export function buildMeta(page: number, limit: number, total: number) {
+  return {
+    page,
+    limit,
+    total,
+    totalPages: Math.ceil(total / limit),
+    hasNext: page * limit < total,
+    hasPrev: page > 1,
+  };
+}
