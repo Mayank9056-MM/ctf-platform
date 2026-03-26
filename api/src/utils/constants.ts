@@ -41,3 +41,23 @@ export const DIFFICULTY_LEVELS: ChallengeDifficulty[] = [
   "hard",
   "insane",
 ];
+
+// Events constants
+
+export const EVENT_STATUSES = [
+  "draft",
+  "scheduled",
+  "active",
+  "paused",
+  "ended",
+  "archived",
+] as const;
+
+export const EVENT_FORMATS = [
+  "jeopardy",
+  "attack_defense",
+  "king_of_hill",
+  "mixed",
+] as const;
+
+export const EVENT_VISIBILITIES = ["public", "invite", "internal"] as const;
