@@ -92,6 +92,7 @@ import teamRouter from "./modules/teams/team.route";
 import challengeRouter from "./modules/challenges/challenge.routes";
 import adminRouter from "./modules/admin/admin.routes";
 import storyRouter from "./modules/story/story.routes";
+import submissionRouter from "./modules/submissions/submission.route";
 
 // routes
 app.use("/api/v1/auth", authRouter);
@@ -99,6 +100,7 @@ app.use("/api/v1/team", teamRouter);
 app.use("/api/v1/challenges", challengeRouter);
 app.use("/api/v1/admin", adminRouter);
 app.use("/api/v1/story", storyRouter);
+app.use("/api/v1/submission", submissionRouter);
 
 // It should be always at bottom
 // 404 handler
