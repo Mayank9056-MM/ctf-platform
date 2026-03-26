@@ -20,7 +20,6 @@ import {
   getChallenges,
   getChallengeSolves,
   purchaseHint,
-  submitFlag,
 } from "./challenge.controller";
 import {
   attachmentUpload,
@@ -94,9 +93,6 @@ challengeRouter.route("/").get(verifyAuth, getChallenges);
 
 // GET /challenges/:id -> get challenge detail
 challengeRouter.route("/:idOrSlug").get(verifyAuth, getChallengeDetail);
-
-// POST /challenges/:id/submit -> submit flag
-challengeRouter.route("/:id/submit").post(verifyAuth, submitFlag);
 
 // POST /challenges/:id/hints -> purchase hint
 challengeRouter.route("/:id/hints").post(verifyAuth, purchaseHint);
