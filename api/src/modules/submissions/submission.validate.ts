@@ -1,36 +1,10 @@
 import { z } from "zod";
-
-// Shared
-
-const mongoId = z.string().regex(/^[a-f\d]{24}$/i, "Invalid MongoDB ObjectId");
-
-const paginationBase = {
-  page: z
-    .string()
-    .optional()
-    .transform((v) => (v ? parseInt(v, 10) : 1))
-    .pipe(z.number().int().min(1, "Page must be at least 1")),
-  limit: z
-    .string()
-    .optional()
-    .transform((v) => (v ? parseInt(v, 10) : 20))
-    .pipe(
-      z
-        .number()
-        .int()
-        .min(1, "Limit must be at least 1")
-        .max(100, "Limit cannot exceed 100")
-    ),
-};
-
-const isoDate = z.iso
-  .datetime("Invalid ISO 8601 datetime")
-  .transform((v) => new Date(v));
-
-const booleanString = z
-  .string()
-  .optional()
-  .transform((v) => (v === "true" ? true : v === "false" ? false : undefined));
+import {
+  booleanString,
+  isoDate,
+  mongoId,
+  paginationBase,
+} from "../../utils/validations";
 
 // Submit flag
 

@@ -3,12 +3,12 @@ import { z } from "zod";
 export const createTeamSchema = z.object({
   name: z
     .string()
-    .min(3, "Team name must have atleast 3 characters")
+    .min(3, "Team name must have at least 3 characters")
     .max(50, "Team name must be under 50 characters")
     .trim()
     .regex(
       /^[a-zA-Z0-9 _-]+$/,
-      "Team name can contain letters, numbers, spaces hypens and underscores"
+      "Team name can contain letters, numbers, spaces hyphens and underscores"
     ),
 
   description: z
@@ -29,12 +29,12 @@ export const createTeamSchema = z.object({
 export const updateTeamSchema = z.object({
   name: z
     .string()
-    .min(3, "Team name must be atleast 3 characters")
+    .min(3, "Team name must be at least 3 characters")
     .max(50, "Team name must be under 50 characters")
     .trim()
     .regex(
       /^[a-zA-Z0-9 _-]+$/,
-      "Team name can only contain letters, numbers, spaces, hypens and underscores"
+      "Team name can only contain letters, numbers, spaces, hyphens and underscores"
     )
     .optional(),
 
@@ -67,7 +67,7 @@ export const joinTeamByCodeSchema = z.object({
 export const inviteUserSchema = z.object({
   username: z
     .string()
-    .min(3, "Username must be atleast 3 characters")
+    .min(3, "Username must be at least 3 characters")
     .max(30, "Username must be under 30 characters")
     .trim(),
 });
