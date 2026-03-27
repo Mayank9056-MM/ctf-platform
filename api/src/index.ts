@@ -96,9 +96,11 @@ import submissionRouter from "./modules/submissions/submission.route";
 import eventRouter from "./modules/events/event.routes";
 import notificationRouter from "./modules/notification/notification.routes";
 import announcementRouter from "./modules/announcement/announcement.routes";
+import userRouter from "./modules/users/user.routes";
 
 // routes
 app.use("/api/v1/auth", authRouter);
+app.use("/api/v1/user", userRouter);
 app.use("/api/v1/team", teamRouter);
 app.use("/api/v1/challenges", challengeRouter);
 app.use("/api/v1/admin", adminRouter);

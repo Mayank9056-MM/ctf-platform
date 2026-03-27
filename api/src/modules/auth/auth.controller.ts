@@ -9,7 +9,6 @@ import {
   OAuthProfileSchema,
   registerSchema,
   resetPasswordSchema,
-  updateAccountDetailsSchema,
 } from "./auth.validator";
 import { CookieOptions } from "express";
 import User from "../../models/user.model";
@@ -174,66 +173,6 @@ const changeCurrentPassword = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, {}, "Password changed successfully"));
 });
 
-const currentUser = asyncHandler(async (req, res) => {
-  if (!req.user) {
-    throw new ApiError(401, "Unauthorized");
-  }
-
-  return res
-    .status(200)
-    .json(new ApiResponse(200, req.user, "User details fetched successfully"));
-});
-
-const updateAccountDetails = asyncHandler(async (req, res) => {
-  const data = parseBody(updateAccountDetailsSchema, req.body);
-
-  if (!req.user) {
-    throw new ApiError(401, "Unauthorized");
-  }
-
-  const updatedUser = await authService.updateAccountDetails(
-    data,
-    req.user._id
-  );
-
-  return res
-    .status(200)
-    .json(
-      new ApiResponse(
-        200,
-        { user: updatedUser },
-        "User details updated succesfully"
-      )
-    );
-});
-
-const updateUserAvatar = asyncHandler(async (req, res) => {
-  if (!req.user) {
-    throw new ApiError(401, "Unauthorized");
-  }
-
-  const avatarBuffer = req.file?.buffer;
-
-  if (!avatarBuffer) {
-    throw new ApiError(400, "Avatar is required");
-  }
-
-  const updatedUser = await authService.updateUserAvatar(
-    { avatarBuffer },
-    req.user
-  );
-
-  return res
-    .status(200)
-    .json(
-      new ApiResponse(
-        200,
-        { user: updatedUser },
-        "User avatar updated successfully"
-      )
-    );
-});
-
 const forgotPassword = asyncHandler(async (req, res) => {
   const data = parseBody(forgotPasswordSchema, req.body);
 
@@ -275,9 +214,6 @@ export {
   logout,
   refreshAccessToken,
   changeCurrentPassword,
-  currentUser,
-  updateAccountDetails,
-  updateUserAvatar,
   forgotPassword,
   resetPassword,
   oauthLogin,

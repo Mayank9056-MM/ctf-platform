@@ -3,10 +3,7 @@ import { config } from "../../config/config";
 import { TokenPayload } from "../../middlewares/verifyAuth.middleware";
 import User, { IUser } from "../../models/user.model";
 import { ApiError } from "../../utils/ApiError";
-import {
-  deleteFromCloudinary,
-  uploadOnCloudinary,
-} from "../../utils/cloudinary";
+import { uploadOnCloudinary } from "../../utils/cloudinary";
 import logger from "../../utils/logger";
 import {
   changeCurrentPasswordInput,
@@ -15,8 +12,6 @@ import {
   OAuthProfileInput,
   RegisterInput,
   resetPasswordInput,
-  updateAccountDetailsInput,
-  updateUserAvatarInput,
 } from "./auth.types";
 import jwt from "jsonwebtoken";
 import { EmailService } from "../../services/emailService";
@@ -272,108 +267,6 @@ class AuthService {
       await this.generateAccessAndRefreshToken(user._id.toString());
 
     return { accessToken, refreshToken };
-  }
-
-  /**
-   * Updates user account details.
-   * @param {updateAccountDetailsInput} data - object containing fields to be updated
-   * @param {Types.ObjectId} userId - id of the user to be updated
-   * @returns {Promise<IUser>} - updated user object
-   * @throws {ApiError} - If no fields are provided for update, if email already exists or if there is an error while updating user
-   */
-  async updateAccountDetails(
-    data: updateAccountDetailsInput,
-    userId: Types.ObjectId
-  ): Promise<IUser> {
-    // remove undefined fields
-    const updateData: Record<string, unknown> = Object.fromEntries(
-      Object.entries(data).filter(([_, v]) => v !== undefined)
-    );
-
-    if (Object.keys(updateData).length === 0) {
-      throw new ApiError(400, "No fields provided for update");
-    }
-
-    // check email if exitsts or not
-    if (updateData.email) {
-      const existingUser = await User.findOne({
-        email: updateData.email,
-        _id: { $ne: userId },
-      });
-
-      if (existingUser) {
-        throw new ApiError(409, "Email already in use");
-      }
-
-      updateData.isVerified = false;
-    }
-
-    const updatedUser = await User.findByIdAndUpdate(
-      userId,
-      {
-        $set: updateData,
-      },
-      {
-        new: true,
-        runValidators: true,
-      }
-    );
-
-    if (!updatedUser) {
-      throw new ApiError(404, "Somthing went wrong while updating user");
-    }
-
-    return updatedUser;
-  }
-
-  /**
-   * Update user avatar
-   * @param {updateUserAvatarInput} data - The data to update user avatar with
-   * @param {IUser} user - The user to update avatar for
-   * @returns {Promise<IUser>} - A promise that resolves to the updated user
-   * @throws {ApiError} - If there is an error while updating user avatar
-   */
-  async updateUserAvatar(data: updateUserAvatarInput, user: IUser) {
-    let avatarUrl;
-    let avatarPublicId;
-
-    try {
-      const res = await uploadOnCloudinary(data.avatarBuffer);
-
-      if (!res?.secure_url) {
-        throw new ApiError(500, "Something went wrong while uplading avatar");
-      }
-
-      avatarUrl = res.secure_url;
-      avatarPublicId = res.public_id;
-    } catch (error) {
-      console.log(error);
-      throw new ApiError(500, "Something went wrong while uploading avatar");
-    }
-
-    const updatedUser = await User.findByIdAndUpdate(
-      user._id,
-      {
-        avatar: {
-          url: avatarUrl,
-          publicId: avatarPublicId,
-        },
-      },
-      {
-        new: true,
-      }
-    );
-
-    if (!updatedUser) {
-      throw new ApiError(500, "Somthing went wrong while updating user avatar");
-    }
-
-    // delete old avatar if exists
-    if (user.avatar?.publicId) {
-      await deleteFromCloudinary(user.avatar.publicId);
-    }
-
-    return updatedUser;
   }
 
   /**
