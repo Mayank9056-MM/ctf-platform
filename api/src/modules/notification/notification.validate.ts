@@ -1,32 +1,16 @@
 import { z } from "zod";
 import { NotificationType } from "../../models/notification.model";
+import {
+  booleanString,
+  mongoId,
+  paginationBase,
+} from "../../utils/validations";
 
 // Shared
-
-const mongoId = z.string().regex(/^[a-f\d]{24}$/i, "Invalid MongoDB ObjectId");
-
-const paginationBase = {
-  page: z
-    .string()
-    .optional()
-    .transform((v) => (v ? parseInt(v, 10) : 1))
-    .pipe(z.number().int().min(1, "Page must be at least 1")),
-
-  limit: z
-    .string()
-    .optional()
-    .transform((v) => (v ? parseInt(v, 10) : 20))
-    .pipe(z.number().int().min(1).max(100, "Limit cannot exceed 100")),
-};
 
 const NOTIFICATION_TYPES = Object.values(NotificationType);
 
 const CHANNELS = ["in_app", "email", "push"] as const;
-
-const booleanString = z
-  .string()
-  .optional()
-  .transform((v) => (v === "true" ? true : v === "false" ? false : undefined));
 
 const isoDate = (label: string) =>
   z.iso

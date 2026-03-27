@@ -1,11 +1,5 @@
 import { z } from "zod";
-
-const mongoId = z.string().regex(/^[a-f\d]{24}$/i, "Invalid MongoDB ObjectId");
-
-const hexColor = z
-  .string()
-  .regex(/^#[0-9a-fA-F]{6}$/, "Must be a valid hex colour e.g. #e11d48")
-  .optional();
+import { hexColor, mongoId } from "../../utils/validations";
 
 // Story
 
