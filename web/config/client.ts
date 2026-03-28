@@ -1,0 +1,18 @@
+import { z } from "zod";
+
+const clientSchema = z.object({
+  NEXT_PUBLIC_API_URL: z.url(),
+  NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN: z.string().min(1),
+  NEXT_PUBLIC_POSTHOG_HOST: z.url(),
+  NEXT_PUBLIC_GITHUB_CLIENT_ID: z.string().min(1),
+  NEXT_PUBLIC_GOOGLE_CLIENT_ID: z.string().min(1),
+});
+
+export const clientConfig = clientSchema.parse({
+  NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
+  NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN:
+    process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN,
+  NEXT_PUBLIC_POSTHOG_HOST: process.env.NEXT_PUBLIC_POSTHOG_HOST,
+  NEXT_PUBLIC_GITHUB_CLIENT_ID: process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID,
+  NEXT_PUBLIC_GOOGLE_CLIENT_ID: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
+});

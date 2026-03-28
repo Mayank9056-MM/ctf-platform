@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import { useAuthStore } from "@/modules/auth/store/auth.store";
 import { useCurrentUser } from "@/modules/auth/hooks/useCurrentUser";
-import { config } from "@/config";
+import { clientConfig } from "@/config/client";
 
 function AuthHydrator({ children }: { children: React.ReactNode }) {
   const isHydrated = useAuthStore((s) => s.isHydrated);
@@ -23,7 +23,7 @@ function AuthHydrator({ children }: { children: React.ReactNode }) {
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || config.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+  const googleClientId = clientConfig.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
 
   return (
     <GoogleOAuthProvider clientId={googleClientId}>

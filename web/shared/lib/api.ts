@@ -1,16 +1,15 @@
-import { config } from "@/config";
 import axios, {
   AxiosError,
   AxiosInstance,
   InternalAxiosRequestConfig,
 } from "axios";
-import { toast } from "sonner";
 import { ApiErrorResponse } from "../types/api.types";
 import { ApiError } from "./api-error";
+import { clientConfig } from "@/config/client";
 
 // instance create
 const api: AxiosInstance = axios.create({
-  baseURL: config.API_URL,
+  baseURL: clientConfig.NEXT_PUBLIC_API_URL,
   withCredentials: true,
   timeout: 10000,
 });
@@ -35,9 +34,9 @@ api.interceptors.response.use(
     // Handle unauthorized (401)
     if (status === 401) {
       // redirect to login
-      toast.error("Please login to continue");
+      // toast.error("Please login to continue");
       if (typeof window !== "undefined") {
-        window.location.href = "/login";
+        // window.location.href = "/login";
       }
     }
 
