@@ -84,7 +84,9 @@ class AuthService {
    * @throws {ApiError} - If the user already exists and has a password, or if there is an error registering the user.
    */
   async registerUser(data: RegisterInput): Promise<IUser> {
-    const existedUser = await User.findOne({ email: data.email });
+    const existedUser = await User.findOne({ email: data.email }).select(
+      "+password"
+    );
 
     if (existedUser) {
       // If user already has password -> normal login
@@ -117,7 +119,7 @@ class AuthService {
     let avatarPublicId: string;
 
     try {
-      const upload = await uploadOnCloudinary(data.avatarBuffer);
+      const upload = await uploadOnCloudinary(data.avatarLocalPath);
 
       if (!upload?.secure_url) {
         throw new ApiError(500, "something went wrong while uploading avatar");
