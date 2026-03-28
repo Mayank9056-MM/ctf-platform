@@ -5,14 +5,13 @@ import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Terminal } from "lucide-react";
-import { api } from "@/shared/lib/api";
-import { useAuthStore } from "@/modules/auth/store/auth.store";
+import { useGithubCallback } from "@/modules/auth/hooks/useGithubCallback";
 
-export function GitHubCallbackPage() {
+export default function GitHubCallbackPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const setUser = useAuthStore((s) => s.setUser);
   const called = useRef(false);
+  const { mutate: githubOAuth } = useGithubCallback();
 
   useEffect(() => {
     if (called.current) return;
@@ -35,18 +34,7 @@ export function GitHubCallbackPage() {
       return;
     }
 
-    api
-      .post("/auth/oauth/callback", { provider: "github", token: code })
-      .then((res) => {
-        setUser(res.data.data.user);
-        toast.success(`Welcome, ${res.data.data.user.username}!`);
-        router.push("/dashboard");
-        router.refresh();
-      })
-      .catch(() => {
-        toast.error("GitHub sign-in failed. Try again.");
-        router.push("/login");
-      });
+    githubOAuth({ provider: "github", token: code });
   }, []);
 
   return (

@@ -1,8 +1,16 @@
-import { config } from "@/config";
+import { clientConfig } from "@/config/client";
 
+/**
+ * Initiates a GitHub OAuth login flow.
+ *
+ * @returns {Object} An object containing the `initiateGitHubLogin` function.
+ * @example
+ * const { initiateGitHubLogin } = useGitHubAuth();
+ * initiateGitHubLogin();
+ */
 export const useGitHubAuth = () => {
   const initiateGitHubLogin = () => {
-    const clientId = config.GITHUB_CLIENT_ID;
+    const clientId = clientConfig.NEXT_PUBLIC_GITHUB_CLIENT_ID;
     const redirectUri = `${window.location.origin}/auth/github/callback`;
     const scope = "read:user user:email";
     const state = crypto.randomUUID(); // CSRF protection

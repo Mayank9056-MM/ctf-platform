@@ -13,7 +13,10 @@ import {
 import { CookieOptions } from "express";
 import User from "../../models/user.model";
 import { verifyGoogleToken } from "../oauth/google.verify";
-import { verifyGithubToken } from "../oauth/github.verify";
+import {
+  getGithubAccessToken,
+  verifyGithubToken,
+} from "../oauth/github.verify";
 import { cacheService } from "../../services/cacheService";
 import jwt from "jsonwebtoken";
 import { parseBody } from "../../utils/helpers";
@@ -72,7 +75,8 @@ const oauthLogin = asyncHandler(async (req, res) => {
   }
 
   if (provider === "github") {
-    profile = await verifyGithubToken(token);
+    const accessToken = await getGithubAccessToken(token);
+    profile = await verifyGithubToken(accessToken);
   }
 
   if (!profile) {
