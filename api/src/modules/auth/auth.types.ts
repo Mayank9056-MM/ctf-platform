@@ -5,7 +5,7 @@ export type RegisterInput = {
   password: string;
   fullName: string;
   provider: "local";
-  avatarBuffer: Buffer;
+  avatarLocalPath: string;
 };
 
 export type OAuthProfileInput = {

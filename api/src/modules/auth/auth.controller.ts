@@ -21,16 +21,19 @@ import { parseBody } from "../../utils/helpers";
 const register = asyncHandler(async (req, res) => {
   const data = parseBody(registerSchema, req.body);
 
-  const avatarBuffer = req.file?.buffer;
+  const avatarLocalPath = req.file?.path;
 
-  if (!avatarBuffer) {
+  if (!avatarLocalPath) {
     throw new ApiError(400, "avatar is required");
   }
 
-  const user = await authService.registerUser({
+  const userwithPassword = await authService.registerUser({
     ...data,
-    avatarBuffer,
+    avatarLocalPath,
   });
+
+  const user = userwithPassword.toObject();
+  delete user.password;
 
   return res
     .status(201)
