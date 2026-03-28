@@ -1,3 +1,4 @@
+import { config } from "../../config/config";
 import { ApiError } from "../../utils/ApiError";
 
 type GithubProfile = {
@@ -7,10 +8,34 @@ type GithubProfile = {
   providerId: string;
 };
 
+export const getGithubAccessToken = async (code: string) => {
+  const res = await fetch("https://github.com/login/oauth/access_token", {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      client_id: config.GITHUB_CLIENT_ID,
+      client_secret: config.GITHUB_CLIENT_SECRET,
+      code,
+    }),
+  });
+
+  const data = await res.json();
+
+  if (!data.access_token) {
+    throw new ApiError(401, "Failed to get GitHub access token");
+  }
+
+  return data.access_token;
+};
+
 export const verifyGithubToken = async (
   token: string
 ): Promise<GithubProfile> => {
   try {
+    console.log(token, "token received for GitHub verification");
     // fetch user profile
     const userRes = await fetch("https://api.github.com/user", {
       headers: {
@@ -55,6 +80,7 @@ export const verifyGithubToken = async (
       providerId: String(user.id),
     };
   } catch (error) {
+    console.error("GitHub token verification error:", error);
     throw new ApiError(401, "Invalid or expired GitHub token");
   }
 };
