@@ -39,6 +39,10 @@ const envSchema = z.object({
   GOOGLE_CLIENT_SECRET: z.string(),
   GOOGLE_REDIRECT_URI: z.string(),
 
+  GITHUB_CLIENT_ID: z.string(),
+  GITHUB_CLIENT_SECRET: z.string(),
+  GITHUB_REDIRECT_URI: z.string(),
+
   // aws s3
   AWS_REGION: z.string().min(5),
   AWS_ACCESS_KEY_ID: z.string().min(16),
