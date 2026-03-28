@@ -9,7 +9,7 @@ export const useGoogleAuth = () => {
   const router = useRouter();
   const setUser = useAuthStore((s) => s.setUser);
   const queryClient = useQueryClient();
- 
+
   return useMutation({
     mutationFn: (token: string) =>
       googleOAuthApi({ provider: "google", token }),
