@@ -6,6 +6,7 @@ import { GoogleOAuthProvider } from "@react-oauth/google";
 import { toast } from "sonner";
 import { getMeApi } from "@/modules/auth/api/auth.api";
 import { useAuthStore } from "@/modules/auth/store/auth.store";
+import { useCurrentUser } from "@/modules/auth/hooks/useCurrentUser";
 
 // Toast messages for redirect reasons
 
@@ -24,11 +25,12 @@ function SessionHydrator({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const calledRef = useRef(false);
+  const { isLoading, isError } = useCurrentUser();
 
- const setUser = useAuthStore((s) => s.setUser);
-const setHydrated = useAuthStore((s) => s.setHydrated);
-const logout = useAuthStore((s) => s.logout);
-const isHydrated = useAuthStore((s) => s.isHydrated);
+  const setUser = useAuthStore((s) => s.setUser);
+  const setHydrated = useAuthStore((s) => s.setHydrated);
+  const logout = useAuthStore((s) => s.logout);
+  const isHydrated = useAuthStore((s) => s.isHydrated);
 
   // Show toast for redirect reason
   useEffect(() => {
@@ -38,7 +40,10 @@ const isHydrated = useAuthStore((s) => s.isHydrated);
     const message = REDIRECT_REASON_MESSAGES[reason];
     if (message) {
       // Small delay so the toast appears after the page loads
-      const t = setTimeout(() => toast.error(message, { id: "auth-redirect" }), 400);
+      const t = setTimeout(
+        () => toast.error(message, { id: "auth-redirect" }),
+        400,
+      );
       return () => clearTimeout(t);
     }
   }, [searchParams]);
@@ -53,7 +58,7 @@ const isHydrated = useAuthStore((s) => s.isHydrated);
             id: "just-registered",
             duration: 6000,
           }),
-        400
+        400,
       );
       return () => clearTimeout(t);
     }
@@ -63,36 +68,14 @@ const isHydrated = useAuthStore((s) => s.isHydrated);
   // Calls /auth/me to validate the httpOnly cookie session.
   // This is the single source of truth for whether the user is logged in.
   useEffect(() => {
-    if (calledRef.current) return;
-    calledRef.current = true;
+    if (isLoading) return;
 
-    const AUTH_PATHS = ["/login", "/register", "/forgot-password"];
-    const isOnAuthPage = AUTH_PATHS.some((p) => pathname.startsWith(p));
-
-    async function verifySession() {
-      try {
-        const res = await getMeApi();
-        setUser(res.data);
-
-        // Redirect to dashboard if user is on an auth page with a valid session
-        if (isOnAuthPage) {
-          const from = searchParams.get("from");
-          router.replace(
-            from && from.startsWith("/") && !AUTH_PATHS.includes(from)
-              ? from
-              : "/dashboard"
-          );
-        }
-      } catch {
-        // No valid session — clear any stale Zustand state
-        logout();
-      } finally {
-        setHydrated();
-      }
+    if (isError) {
+      logout();
     }
 
-    verifySession();
-  }, []);
+    setHydrated();
+  }, [isLoading, isError]);
 
   // Prevent flash of authenticated content
   // While we're verifying the session, show a loading state.
@@ -111,7 +94,9 @@ const isHydrated = useAuthStore((s) => s.isHydrated);
               />
             ))}
           </div>
-          <p className="font-mono text-xs text-slate-600">Verifying session...</p>
+          <p className="font-mono text-xs text-slate-600">
+            Verifying session...
+          </p>
         </div>
       </div>
     );
