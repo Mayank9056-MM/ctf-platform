@@ -1,4 +1,5 @@
 import { clientConfig } from "@/config/client";
+import { toast } from "sonner";
 
 /**
  * Initiates a GitHub OAuth login flow.
@@ -11,19 +12,24 @@ import { clientConfig } from "@/config/client";
 export const useGitHubAuth = () => {
   const initiateGitHubLogin = () => {
     const clientId = clientConfig.NEXT_PUBLIC_GITHUB_CLIENT_ID;
+    if (!clientId) {
+      toast.error("GitHub OAuth is not configured.");
+      return;
+    }
+
     const redirectUri = `${window.location.origin}/auth/github/callback`;
-    const scope = "read:user user:email";
+
     const state = crypto.randomUUID(); // CSRF protection
+
     sessionStorage.setItem("github_oauth_state", state);
 
-    const url =
-      `https://github.com/login/oauth/authorize` +
-      `?client_id=${clientId}` +
-      `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-      `&scope=${encodeURIComponent(scope)}` +
-      `&state=${state}`;
-
-    window.location.href = url;
+    const params = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: redirectUri,
+      scope: "read:user user:email",
+      state,
+    });
+    window.location.href = `https://github.com/login/oauth/authorize?${params}`;
   };
 
   return { initiateGitHubLogin };
