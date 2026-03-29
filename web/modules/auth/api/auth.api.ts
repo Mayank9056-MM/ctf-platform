@@ -18,13 +18,6 @@ export const registerApi = async (
   formData.append("fullName", data.fullName);
   if (data.avatar) formData.append("avatar", data.avatar);
 
-  console.log("calling register API with data:", {
-    email: data.email,
-    password: "********",
-    fullName: data.fullName,
-    avatar: data.avatar ? data.avatar.name : null,
-  });
-
   const res = await api.post<RegisterResponse>(
     "/api/v1/auth/register",
     formData,
@@ -33,7 +26,6 @@ export const registerApi = async (
     },
   );
 
-  console.log("register API response:", res.data);
   return res.data;
 };
 
@@ -41,7 +33,6 @@ export const registerApi = async (
 
 export const loginApi = async (data: LoginFormData): Promise<AuthResponse> => {
   const res = await api.post<AuthResponse>("/api/v1/auth/login", data);
-  console.log("login API response:", res.data);
   return res.data;
 };
 
@@ -50,7 +41,6 @@ export const loginApi = async (data: LoginFormData): Promise<AuthResponse> => {
 export const googleOAuthApi = async (
   payload: OAuthCallbackInput,
 ): Promise<AuthResponse> => {
-  console.log("Calling Google OAuth API with payload:", payload);
   const res = await api.post<AuthResponse>("/api/v1/auth/oauth", payload);
   return res.data;
 };
@@ -58,7 +48,6 @@ export const googleOAuthApi = async (
 export const githubOAuthApi = async (
   payload: OAuthCallbackInput,
 ): Promise<AuthResponse> => {
-  console.log("Calling GitHub OAuth API with payload:", payload);
   const res = await api.post<AuthResponse>("/api/v1/auth/oauth", payload);
   return res.data;
 };
