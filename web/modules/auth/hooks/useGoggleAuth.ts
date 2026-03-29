@@ -21,7 +21,11 @@ export const useGoogleAuth = () => {
       router.refresh();
     },
     onError: (err: ApiError) => {
-      toast.error(err.message ?? "Google sign-in failed. Try again.");
+      if (err.statusCode === 403) {
+        toast.error("This Google account has been banned from the platform.");
+      } else {
+        toast.error("Google sign-in failed. Try a different method.");
+      }
     },
   });
 };
