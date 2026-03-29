@@ -33,6 +33,7 @@ app.use(
       "Access-Control-Allow-Origin",
       "Origin",
       "Access",
+      "X-Request-ID",
     ],
   })
 );
