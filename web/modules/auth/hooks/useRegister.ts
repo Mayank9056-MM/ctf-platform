@@ -16,14 +16,16 @@ export const useRegister = () => {
         (p) => p.provider === "local",
       );
 
-      toast.success("Account created! Check your email to verify.", {
-        duration: 5000,
-      });
-
       // If local account → needs email verification → go to login
       if (hasLocalProvider) {
+        toast.success("Account created! Check your inbox.", {
+          id: "register-success",
+          duration: 6000,
+          description: "Verify your email to unlock all platform features.",
+        });
         router.push("/login?registered=true");
       } else {
+        toast.success(`Welcome aboard, ${res.data.username}!`);
         router.push("/dashboard");
       }
     },
@@ -31,13 +33,16 @@ export const useRegister = () => {
       const status = err.statusCode;
 
       if (status === 409) {
-        toast.error("Email already exists. Try logging in.");
-      } else if (status === 400) {
-        toast.error("Invalid input. Check your details.");
-      } else if (status === 500) {
-        toast.error("Server error. Please try again later.");
+        toast.error("An account with this email already exists.", {
+          description: "Try signing in instead.",
+          action: { label: "Sign in", onClick: () => router.push("/login") },
+        });
+      } else if (status === 413) {
+        toast.error("Avatar file too large. Maximum is 5 MB.");
+      } else if (status === 415) {
+        toast.error("Unsupported avatar format. Use JPEG, PNG, or WEBP.");
       } else {
-        showErrorToast(err);
+        toast.error(err.message || "Registration failed. Please try again.");
       }
     },
   });
