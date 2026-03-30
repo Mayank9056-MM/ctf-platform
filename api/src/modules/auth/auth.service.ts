@@ -255,7 +255,7 @@ class AuthService {
       config.REFRESH_TOKEN_SECRET
     ) as TokenPayload;
 
-    const user = await User.findById(decodedToken?._id);
+    const user = await User.findById(decodedToken?._id).select("+refreshToken");
 
     if (!user) {
       throw new ApiError(403, "Invalid refresh token");
