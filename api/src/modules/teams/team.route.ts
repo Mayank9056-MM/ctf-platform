@@ -26,6 +26,7 @@ const teamRouter = express.Router();
 // GET /teams/:id (public team profile)
 // POST /teams/search (search teams by name)
 teamRouter.route("/get-team/:id").get(getTeam);
+teamRouter.route("/search").get(searchTeams);
 teamRouter.route("/search").post(searchTeams);
 
 // PRIVATE ROUTES

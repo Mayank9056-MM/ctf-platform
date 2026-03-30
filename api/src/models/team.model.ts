@@ -129,6 +129,9 @@ teamSchema.index({ score: -1 });
 teamSchema.index({ owner: 1 });
 teamSchema.index({ joinCode: 1 });
 teamSchema.index({ isActive: 1, score: -1 });
+teamSchema.index({ isActive: 1, isPrivate: 1, score: -1 });
+teamSchema.index({ isActive: 1, isPrivate: 1, country: 1, score: -1 });
+teamSchema.index({ isActive: 1, isPrivate: 1, name: 1 });
 
 // Virtual for member count
 teamSchema.virtual("memberCount").get(function () {

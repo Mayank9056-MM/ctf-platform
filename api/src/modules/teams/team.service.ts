@@ -1,4 +1,4 @@
-import { Types } from "mongoose";
+import mongoose, { Types } from "mongoose";
 import Team, { ITeam } from "../../models/team.model";
 import { ApiError } from "../../utils/ApiError";
 import User from "../../models/user.model";
@@ -450,39 +450,114 @@ class TeamService {
     await User.findByIdAndUpdate(targetUserId, { teamId: null });
   }
 
+  /**
+   * Searches for teams based on the given filters.
+   * @param filters - The filters to use when searching for teams.
+   * @returns A promise that resolves to an object containing the searched teams and metadata.
+   * @property teams - The searched teams.
+   * @property meta - The metadata of the search.
+   * @property meta.total - The total number of teams that match the search.
+   * @property meta.page - The current page number of the search.
+   * @property meta.limit - The number of teams per page of the search.
+   * @property meta.totalPages - The total number of pages of the search.
+   * @property meta.hasNext - Whether there is a next page of teams to be searched.
+   * @property meta.hasPrev - Whether there is a previous page of teams to be searched.
+   */
   async searchTeams(filters: SearchTeamInput) {
-    const { q, country } = filters;
+    const { q, country, sortBy = "score", sortOrder = "desc" } = filters;
 
-    const page = Number(filters.page) || 1;
-    const limit = Number(filters.limit) || 20;
+    const page = Math.max(1, Number(filters.page) || 1);
+    const limit = Math.min(50, Math.max(1, Number(filters.limit) || 20));
+    const skip = (page - 1) * limit;
+    const dir = sortOrder === "asc" ? 1 : -1;
 
-    const query: Record<string, unknown> = {
+    // Build $match
+    const match: Record<string, unknown> = {
       isActive: true,
       isPrivate: false,
     };
 
-    if (q) {
-      query.name = { $regex: q.trim(), $options: "i" };
+    if (q?.trim()) {
+      // Escape special regex chars to prevent ReDoS
+      const safe = q.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      match.name = { $regex: safe, $options: "i" };
     }
 
     if (country) {
-      query.country = country.toUpperCase();
+      match.country = country.toUpperCase();
     }
 
-    const [teams, total] = await Promise.all([
-      Team.find(query)
-        .select(
-          "name description avatar score members maxMembers country isPrivate"
-        )
-        .sort({ score: -1 })
-        .skip((page - 1) * limit)
-        .limit(limit)
-        .lean(),
+    // memberCount requires $size on the members array inside aggregation.
+    // score and createdAt are plain fields — we can use .find() for those,
+    // but we use aggregation for ALL cases to keep the code unified and to
+    // support a computed memberCount field in the response.
+    const sortStage: Record<string, 1 | -1> =
+      sortBy === "memberCount"
+        ? { memberCount: dir, _id: 1 }
+        : { [sortBy]: dir, _id: 1 }; // _id tiebreaker → stable pagination
 
-      Team.countDocuments(query),
-    ]);
+    // Aggregation pipeline
+    const pipeline: mongoose.PipelineStage[] = [
+      { $match: match },
 
-    return { teams, total, page, limit };
+      // Add computed memberCount so we can sort by it AND return it cheaply
+      {
+        $addFields: {
+          memberCount: { $size: "$members" },
+        },
+      },
+
+      // Run count + paginated data in parallel (single round-trip)
+      {
+        $facet: {
+          metadata: [{ $count: "total" }],
+          teams: [
+            { $sort: sortStage },
+            { $skip: skip },
+            { $limit: limit },
+            {
+              $project: {
+                name: 1,
+                description: 1,
+                avatar: 1,
+                score: 1,
+                memberCount: 1,
+                maxMembers: 1,
+                country: 1,
+                isPrivate: 1,
+                createdAt: 1,
+              },
+            },
+          ],
+        },
+      },
+
+      // Flatten the metadata array
+      {
+        $project: {
+          teams: 1,
+          total: { $ifNull: [{ $arrayElemAt: ["$metadata.total", 0] }, 0] },
+        },
+      },
+    ];
+
+    const [result] = await Team.aggregate(pipeline);
+
+    const total = result?.total ?? 0;
+    const teams = result?.teams ?? [];
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      teams,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages,
+        hasNext: page < totalPages,
+        hasPrev: page > 1,
+      },
+    };
   }
 
   // Admin

@@ -19,9 +19,11 @@ export type updateTeamInput = {
   teamId: string;
 };
 
-export type SearchTeamInput = {
+export interface SearchTeamInput {
   q?: string;
+  country?: string;
   page?: number;
   limit?: number;
-  country?: string;
-};
+  sortBy?: "score" | "memberCount" | "createdAt";
+  sortOrder?: "asc" | "desc";
+}
