@@ -98,17 +98,21 @@ function daysBefore(n: number): Date {
   return new Date(Date.now() - n * 24 * 60 * 60 * 1000);
 }
 
-/**
- * Returns a new Date object representing the start of the day for the given date.
- * The returned date object will have its hour, minute, second, and millisecond components set to zero.
- * If no date is provided, the current date is used.
- * @param {Date} [date] - The date to return the start of the day for (defaults to the current date).
- * @returns {Date} A new Date object representing the start of the day for the given date.
- */
-function startOfDay(date = new Date()): Date {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  return d;
+/** Returns midnight UTC of a given date string "YYYY-MM-DD" */
+function toUtcMidnight(dateStr: string): Date {
+  return new Date(`${dateStr}T00:00:00.000Z`);
+}
+
+/** Returns today's date as "YYYY-MM-DD" in UTC */
+function todayUtc(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/** Returns yesterday's date as "YYYY-MM-DD" in UTC */
+function yesterdayUtc(): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
 }
 
 class SubmissionService {
@@ -391,12 +395,14 @@ class SubmissionService {
   }
 
   /**
-   * Retrieves user submission statistics, including total submissions, correct submissions, first bloods, total points earned, average attempts per solve, solve rate, and recent activity for the last 30 days.
-   * @param {Types.ObjectId} userId - The user to fetch statistics for.
-   * @returns {Promise<UserSubmissionStats>} - A promise which resolves to an object containing the user submission statistics.
+   * Retrieves a user's submission statistics.
+   * @param {Types.ObjectId} userId - The ID of the user to retrieve submission stats for.
+   * @returns {Promise<UserSubmissionStats>} - A promise which resolves to an object containing the user's submission stats.
    */
   async getMyStats(userId: Types.ObjectId): Promise<UserSubmissionStats> {
-    const [totals, recentActivity] = await Promise.all([
+    // Run all independent queries in parallel
+    const [totals, recentActivity, rankResult, solvedDays] = await Promise.all([
+      // 1. Submission totals
       Submission.aggregate([
         { $match: { user: userId } },
         {
@@ -410,7 +416,7 @@ class SubmissionService {
         },
       ]),
 
-      // Activity for the last 30 days
+      // 2. Daily activity (last 30 days) — all submissions
       Submission.aggregate([
         {
           $match: {
@@ -429,18 +435,68 @@ class SubmissionService {
         { $sort: { _id: 1 } },
         { $project: { date: "$_id", count: 1, _id: 0 } },
       ]),
+
+      (async () => {
+        const user = await User.findById(userId).select("score").lean();
+        if (!user) return 1;
+
+        const usersAbove = await User.countDocuments({
+          score: { $gt: user.score },
+          isDeleted: false,
+          isBanned: false,
+        });
+
+        return usersAbove + 1; // rank 1-based
+      })(),
+
+      Submission.aggregate([
+        {
+          $match: {
+            user: userId,
+            isCorrect: true,
+            createdAt: { $gte: daysBefore(365) },
+          },
+        },
+        {
+          $group: {
+            _id: {
+              $dateToString: { format: "%Y-%m-%d", date: "$createdAt" },
+            },
+          },
+        },
+        { $sort: { _id: -1 } }, // newest first
+        { $project: { date: "$_id", _id: 0 } },
+      ]),
     ]);
 
-    const t = totals[0] ?? {
-      total: 0,
-      correct: 0,
-      firstBloods: 0,
-      totalPoints: 0,
-    };
+    let streak = 0;
 
-    const incorrect = t.total - t.correct;
-    const solveRate =
-      t.total > 0 ? Math.round((t.correct / t.total) * 100 * 100) / 100 : 0;
+    if (solvedDays.length > 0) {
+      const solvedSet = new Set<string>(
+        (solvedDays as { date: string }[]).map((d) => d.date)
+      );
+
+      const today = todayUtc();
+      const yesterday = yesterdayUtc();
+
+      // Streak must include today or yesterday to be "active"
+      const startDay = solvedSet.has(today)
+        ? today
+        : solvedSet.has(yesterday)
+          ? yesterday
+          : null;
+
+      if (startDay) {
+        // Walk backwards day by day from startDay
+        const current = new Date(`${startDay}T00:00:00.000Z`);
+        while (true) {
+          const dateStr = current.toISOString().slice(0, 10);
+          if (!solvedSet.has(dateStr)) break;
+          streak++;
+          current.setUTCDate(current.getUTCDate() - 1);
+        }
+      }
+    }
 
     // Average attempts per correct solve
     const attemptStats = await Submission.aggregate([
@@ -484,6 +540,17 @@ class SubmissionService {
       },
     ]);
 
+    // Assemble result
+    const t = totals[0] ?? {
+      total: 0,
+      correct: 0,
+      firstBloods: 0,
+      totalPoints: 0,
+    };
+
+    const incorrect = t.total - t.correct;
+    const solveRate =
+      t.total > 0 ? Math.round((t.correct / t.total) * 100 * 100) / 100 : 0;
     const avgAttempts =
       Math.round((attemptStats[0]?.avgAttempts ?? 1) * 10) / 10;
 
@@ -495,7 +562,10 @@ class SubmissionService {
       totalPointsEarned: t.totalPoints,
       averageAttemptsPerSolve: avgAttempts,
       solveRate,
-      recentActivity,
+      recentActivity: recentActivity as { date: string; count: number }[],
+      rank: rankResult,
+      streak,
+      challengesSolved: t.correct,
     };
   }
 

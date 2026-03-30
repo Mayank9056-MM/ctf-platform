@@ -177,27 +177,14 @@ const kickMember = asyncHandler(async (req, res) => {
 });
 
 const searchTeams = asyncHandler(async (req, res) => {
-  const data = parseBody(searchTeamSchema, req.body);
+  const raw = Object.keys(req.query).length ? req.query : req.body;
+  const data = parseBody(searchTeamSchema, raw);
 
   const result = await teamService.searchTeams(data);
 
-  return res.status(200).json(
-    new ApiResponse(
-      200,
-      {
-        teams: result.teams,
-        meta: {
-          page: result.page,
-          limit: result.limit,
-          total: result.total,
-          totalPages: Math.ceil(result.total / result.limit),
-          hasNext: result.page * result.limit < result.total,
-          hasPrev: result.page > 1,
-        },
-      },
-      "Teams found successfully"
-    )
-  );
+  return res
+    .status(200)
+    .json(new ApiResponse(200, result, "Teams fetched successfully"));
 });
 
 // Admin

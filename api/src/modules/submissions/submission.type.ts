@@ -99,4 +99,7 @@ export type UserSubmissionStats = {
     date: string;
     count: number;
   }[];
+  rank: number;
+  streak: number;
+  challengesSolved: number;
 };
