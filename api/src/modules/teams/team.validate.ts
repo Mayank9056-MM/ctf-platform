@@ -73,23 +73,58 @@ export const inviteUserSchema = z.object({
 });
 
 export const searchTeamSchema = z.object({
-  q: z.string().max(50).trim().optional(),
-
-  page: z
+  q: z
     .string()
-    .optional()
-    .transform((v) => (v ? parseInt(v, 10) : 1))
-    .pipe(z.number().int().min(1)),
-
-  limit: z
-    .string()
-    .optional()
-    .transform((v) => (v ? parseInt(v, 10) : 20))
-    .pipe(z.number().int().min(1).max(100)),
+    .trim()
+    .min(1, "Search query must be at least 1 character")
+    .max(50, "Search query cannot exceed 50 characters")
+    .optional(),
 
   country: z
     .string()
-    .length(2, "Country must be a 2-letter ISO code")
+    .trim()
+    .length(2, "Country must be a valid ISO 3166-1 alpha-2 code (e.g. IN, US)")
     .toUpperCase()
     .optional(),
+
+  page: z
+    .union([z.string(), z.number()])
+    .transform(Number)
+    .pipe(
+      z
+        .number()
+        .int("Page must be an integer")
+        .min(1, "Page must be at least 1")
+    )
+    .optional()
+    .default(1),
+
+  limit: z
+    .union([z.string(), z.number()])
+    .transform(Number)
+    .pipe(
+      z
+        .number()
+        .int("Limit must be an integer")
+        .min(1, "Limit must be at least 1")
+        .max(50, "Limit cannot exceed 50")
+    )
+    .optional()
+    .default(20),
+
+  sortBy: z
+    .enum(["score", "memberCount", "createdAt"], {
+      error: () => ({
+        message: "sortBy must be one of: score, memberCount, createdAt",
+      }),
+    })
+    .optional()
+    .default("score"),
+
+  sortOrder: z
+    .enum(["asc", "desc"], {
+      error: () => ({ message: "sortOrder must be asc or desc" }),
+    })
+    .optional()
+    .default("desc"),
 });

@@ -28,7 +28,6 @@ const teamRouter = express.Router();
 teamRouter.route("/get-team/:id").get(getTeam);
 teamRouter.route("/search").get(searchTeams);
 teamRouter.route("/search").post(searchTeams);
-
 // PRIVATE ROUTES
 
 // POST /teams (create team)
