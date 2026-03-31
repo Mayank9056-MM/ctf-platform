@@ -129,7 +129,7 @@ const acceptInvite = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Team id is required");
   }
 
-  const team = await teamService.acceptInviteSerive(req.user!._id, id);
+  const team = await teamService.acceptInviteService(req.user!._id, id);
 
   return res
     .status(200)
