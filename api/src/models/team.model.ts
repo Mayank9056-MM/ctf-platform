@@ -154,6 +154,7 @@ teamSchema.methods.isJoinCodeValid = function (code: string): Promise<boolean> {
 
 // Ensure user is not already a member of another team
 teamSchema.pre("save", async function () {
+  if (!this.isModified("members")) return;
   const User = mongoose.model("User");
 
   const users = await User.find({ _id: { $in: this.members } });
