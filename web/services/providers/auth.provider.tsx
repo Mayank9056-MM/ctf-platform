@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { usePathname, useSearchParams, useRouter } from "next/navigation";
+import { useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import { toast } from "sonner";
-import { getMeApi } from "@/modules/auth/api/auth.api";
 import { useAuthStore } from "@/modules/auth/store/auth.store";
-import { useCurrentUser } from "@/modules/auth/hooks/useCurrentUser";
+import { useCurrentUser } from "@/modules/users/hooks/useCurrentUser";
 
 // Toast messages for redirect reasons
 
@@ -21,13 +20,9 @@ const REDIRECT_REASON_MESSAGES: Record<string, string> = {
 // Session hydrator
 
 function SessionHydrator({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
-  const pathname = usePathname();
   const searchParams = useSearchParams();
-  const calledRef = useRef(false);
   const { isLoading, isError } = useCurrentUser();
 
-  const setUser = useAuthStore((s) => s.setUser);
   const setHydrated = useAuthStore((s) => s.setHydrated);
   const logout = useAuthStore((s) => s.logout);
   const isHydrated = useAuthStore((s) => s.isHydrated);

@@ -5,3 +5,14 @@ export type ApiErrorResponse = {
   errors?: unknown[];
   data: null;
 };
+
+export interface ApiPaginationParams {
+  page?: number;
+  limit?: number;
+}
+
+export interface ApiResponse<T> {
+  success: boolean;
+  data: T;
+  message: string;
+}
