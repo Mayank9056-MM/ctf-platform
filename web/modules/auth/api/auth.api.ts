@@ -3,7 +3,6 @@
 import { api } from "@/shared/lib/api";
 import {
   AuthResponse,
-  MeResponse,
   OAuthCallbackInput,
   RegisterResponse,
 } from "../types/auth.types";
@@ -55,14 +54,9 @@ export const githubOAuthApi = async (
 // Logout
 
 export const logoutApi = async (): Promise<void> => {
-  await api.post("/api/v1/auth/logout");
-};
-
-// Me
-
-export const getMeApi = async (): Promise<MeResponse> => {
-  const res = await api.get<MeResponse>("/api/v1/user/current-user");
-  return res.data;
+  const res = await api.post("/api/v1/auth/logout");
+  console.log("logout ", res);
+  return res.data.data;
 };
 
 // Refresh
