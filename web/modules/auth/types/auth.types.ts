@@ -72,11 +72,6 @@ export type RegisterResponse = {
   message: string;
 };
 
-export type MeResponse = {
-  statusCode: number;
-  data: AuthUser;
-  message: string;
-};
 
 // Zustand Store Types
 
