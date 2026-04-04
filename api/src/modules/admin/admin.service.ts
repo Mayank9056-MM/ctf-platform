@@ -23,6 +23,7 @@ import Story from "../../models/story.model";
 import UserStoryProgress from "../../models/userProgressStory.model";
 import Team from "../../models/team.model";
 import Challenge from "../../models/challenge.model";
+import { refreshTokenService } from "../refreshToken/refreshToken.service";
 
 // Internal Helpers
 
@@ -347,15 +348,15 @@ class AdminService {
   }
 
   /**
-   * Retrieves a user by its ID.
-   * @param {string} userId - The ID of the user to retrieve.
-   * @returns {Promise<{ IUser & { submissionCount: number, correctSolves: number }>>} - A promise which resolves to an object containing the user and the number of submissions and correct solves the user has made.
-   * @throws {ApiError} - If the user is not found.
+   * Get a user by ID.
+   * @param {string} userId - The MongoDB ObjectId of the user.
+   * @returns {Promise<object>} - The user object with additional fields `submissionCount` and `correctSolves`.
+   * @throws {ApiError} - If the user is not found, a 404 error is thrown.
    */
   async getUserById(userId: string) {
     const user = await User.findById(userId)
       .select(
-        "-password -refreshToken -resetPasswordToken -emailVerificationToken -resetPasswordExpire -emailVerificationExpire"
+        "-password -resetPasswordToken -emailVerificationToken -resetPasswordExpire -emailVerificationExpire"
       )
       .populate("teamId", "name avatar score isActive")
       .lean();
@@ -447,12 +448,12 @@ class AdminService {
   /**
    * Bans a user from the application.
    * Only admins can ban users.
-   * @param payload - The payload containing the user ID to ban, the reason for the ban and the optional expiry date.
-   * @param requesterId - The ID of the admin who is banning the user.
-   * @param requesterUsername - The username of the admin who is banning the user.
+   * @param {BanUserPayload} payload - The payload containing the user ID, reason and expiry date.
+   * @param {Types.ObjectId} requesterId - The ID of the admin who is banning the user.
+   * @param {string} requesterUsername - The username of the admin who is banning the user.
    * @throws {ApiError} 404 - User not found
    * @throws {ApiError} 409 - User is already banned
-   * @returns A promise that resolves when the user is banned.
+   * @returns {Promise<User>} - The promise of the banned user.
    */
   async banUser(
     payload: BanUserPayload,
@@ -467,6 +468,8 @@ class AdminService {
 
     user.isBanned = true;
     await user.save({ validateBeforeSave: false });
+
+    await refreshTokenService.revokeAllForUser(user._id, "banned");
 
     await audit({
       action: "user:ban",
@@ -598,12 +601,14 @@ class AdminService {
   }
 
   /**
-   * Deletes a user account.
-   * Throws 401 if the requesting user is attempting to delete their own account.
-   * Throws 404 if the user is not found.
-   * @param {string} userId - The id of the user to delete.
-   * @param {Types.ObjectId} requesterId - The id of the user performing the action.
-   * @param {string} requesterUsername - The username of the user performing the action.
+   * Deletes a user from the application.
+   * Only superadmins can delete users.
+   * @param {string} userId - The ID of the user to delete.
+   * @param {Types.ObjectId} requesterId - The ID of the superadmin who is deleting the user.
+   * @param {string} requesterUsername - The username of the superadmin who is deleting the user.
+   * @throws {ApiError} 401 - You cannot delete your own account via the admin panel
+   * @throws {ApiError} 404 - User not found
+   * @returns A promise that resolves when the user is deleted.
    */
   async deleteUser(
     userId: string,
@@ -647,6 +652,7 @@ class AdminService {
       user.providers = [] as unknown as typeof user.providers;
 
       await user.save({ session, validateBeforeSave: false });
+      await refreshTokenService.revokeAllForUser(user._id, "deleted");
 
       await session.commitTransaction();
     } catch (err) {

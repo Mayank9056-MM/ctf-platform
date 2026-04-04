@@ -25,6 +25,7 @@ import User from "../../models/user.model";
 import Team from "../../models/team.model";
 import AuditLog, { IAuditLogModel } from "../../models/auditlog.model";
 import { storyService } from "../story/story.service";
+import { leaderboardService } from "../leaderboard/leaderboard.service";
 
 type solveWithRank = ISubmission & { rank: number };
 
@@ -118,10 +119,14 @@ function yesterdayUtc(): string {
 class SubmissionService {
   /**
    * Submits a flag for a challenge.
-   * @param {SubmitFlagPayload} payload - Payload containing the user, team, challenge, flag, IP, and user agent.
-   * @returns {Promise<SubmitFlagResult>} A promise resolving to a SubmitFlagResult object indicating whether the submission was correct, the points awarded, whether the user earned first blood, and the current score of the user.
-   * @throws {ApiError} If the challenge does not exist, is not visible, or has already been solved by the user.
-   * @throws {ApiError} If the user has exceeded the maximum number of incorrect attempts in the last minute.
+   * Verifies the flag against the challenge's flag. If correct, increments the challenge's solve count and awards points to the user and/or team.
+   * If the user has already solved the challenge, returns 409.
+   * If the team has already solved the challenge, returns 409.
+   * If the challenge is closed, returns 400.
+   * If the user has too many recent incorrect attempts, returns 429.
+   * @param payload - The submission payload containing the user ID, team ID, challenge ID, flag, IP address, and user agent.
+   * @returns A promise resolving to a SubmitFlagResult object containing the correctness of the flag, points awarded, whether it was the first blood, the new score of the user, and a message.
+   * @throws ApiError - If the challenge is not found, the user has already solved the challenge, the team has already solved the challenge, the challenge is closed, or the user has too many recent incorrect attempts.
    */
   async submitFlag(payload: SubmitFlagPayload): Promise<SubmitFlagResult> {
     const { userId, teamId, challengeId, flag, ip, userAgent } = payload;
@@ -240,6 +245,20 @@ class SubmissionService {
           $inc: { score: pointsAwarded },
         }),
     ]);
+
+    leaderboardService
+      .markStale("global_user")
+      .catch((err) =>
+        logger.warn("[SubmissionService] Leaderboard mark stale failed", err)
+      );
+
+    if (teamId) {
+      leaderboardService
+        .markStale("global_team")
+        .catch((err) =>
+          logger.warn("[SubmissionService] Leaderboard mark stale failed", err)
+        );
+    }
 
     // Anti-cheat tracking
     trackFlagShare(challengeId, submittedHash, ip);
@@ -966,6 +985,20 @@ class SubmissionService {
             $inc: { solveCount: -1, totalAttempts: -1 },
           }),
     ]);
+
+    leaderboardService
+      .markStale("global_user")
+      .catch((err) =>
+        logger.warn("[SubmissionService] Leaderboard mark stale failed", err)
+      );
+
+    if (submission.team) {
+      leaderboardService
+        .markStale("global_team")
+        .catch((err) =>
+          logger.warn("[SubmissionService] Leaderboard mark stale failed", err)
+        );
+    }
 
     // Clamp user score to 0 in case of floating point / race
     await User.updateOne(

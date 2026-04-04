@@ -24,6 +24,7 @@ import { ApiError } from "../../utils/ApiError";
 import Submission from "../../models/submission.model";
 import Team from "../../models/team.model";
 import Challenge from "../../models/challenge.model";
+import { leaderboardService } from "../leaderboard/leaderboard.service";
 
 /**
  * Write an audit log entry.
@@ -352,81 +353,34 @@ class EventService {
     }
 
     if (type === "user") {
-      const pipeline = [
-        { $match: submissionDateFilter },
-        {
-          $group: {
-            _id: "$user",
-            totalPoints: { $sum: "$pointsAwarded" },
-            solveCount: { $sum: 1 },
-            lastSolveAt: { $max: "$createdAt" },
-            teamId: { $last: "$team" },
-          },
-        },
-        {
-          $sort: { totalPoints: -1, lastSolveAt: 1 } as Record<string, 1 | -1>,
-        },
-        { $skip: (page - 1) * limit },
-        { $limit: limit },
-        {
-          $lookup: {
-            from: "users",
-            localField: "_id",
-            foreignField: "_id",
-            as: "user",
-          },
-        },
-        { $unwind: "$user" },
-        {
-          $lookup: {
-            from: "teams",
-            localField: "teamId",
-            foreignField: "_id",
-            as: "team",
-          },
-        },
-        {
-          $project: {
-            userId: "$_id",
-            username: "$user.username",
-            avatar: "$user.avatar",
-            country: "$user.country",
-            teamId: { $arrayElemAt: ["$team._id", 0] },
-            teamName: { $arrayElemAt: ["$team.name", 0] },
-            totalPoints: 1,
-            solveCount: 1,
-            lastSolveAt: 1,
-          },
-        },
-      ];
-
-      const [entries, totalCount] = await Promise.all([
-        Submission.aggregate(pipeline),
-        Submission.aggregate([
-          { $match: submissionDateFilter },
-          { $group: { _id: "$user" } },
-          { $count: "total" },
-        ]).then((r) => r[0]?.total ?? 0),
-      ]);
+      const result = await leaderboardService.getLeaderboard({
+        scope: type === "user" ? "event_user" : "event_team",
+        eventId,
+        page,
+        limit,
+      });
 
       return {
         eventId,
         eventName: event.name,
         isScoreboardFrozen: event.scoring.scoreboardFrozen,
         frozenAt: event.scoring.scoreboardFrozenAt,
-        entries: entries.map((e, i) => ({
+        entries: result.entries.map((e, i) => ({
           rank: (page - 1) * limit + i + 1,
-          userId: e.userId.toString(),
+
+          userId: e.entityType === "user" ? e.entityId.toString() : "",
           username: e.username,
           avatar: e.avatar,
           country: e.country,
+
           teamId: e.teamId?.toString(),
           teamName: e.teamName,
-          score: e.totalPoints,
+
+          score: e.score,
           solveCount: e.solveCount,
           lastSolveAt: e.lastSolveAt,
         })),
-        total: totalCount,
+        total: result.meta.total,
         page,
         limit,
       };
@@ -468,33 +422,31 @@ class EventService {
       },
     ];
 
-    const [teamEntries, teamTotal] = await Promise.all([
-      Submission.aggregate(teamPipeline),
-      Submission.aggregate([
-        { $match: { ...submissionDateFilter, team: { $ne: null } } },
-        { $group: { _id: "$team" } },
-        { $count: "total" },
-      ]).then((r) => r[0]?.total ?? 0),
-    ]);
+    const result = await leaderboardService.getLeaderboard({
+      scope: "event_team",
+      eventId,
+      page,
+      limit,
+    });
 
     return {
       eventId,
       eventName: event.name,
       isScoreboardFrozen: event.scoring.scoreboardFrozen,
       frozenAt: event.scoring.scoreboardFrozenAt,
-      entries: teamEntries.map((e, i) => ({
+      entries: result.entries.map((e, i) => ({
         rank: (page - 1) * limit + i + 1,
         userId: "",
-        username: e.teamName,
+        username: e?.teamName || "",
         avatar: e.avatar,
         country: e.country,
-        teamId: e.teamId.toString(),
+        teamId: e?.teamId?.toString() || "",
         teamName: e.teamName,
-        score: e.totalPoints,
+        score: e.score,
         solveCount: e.solveCount,
         lastSolveAt: e.lastSolveAt,
       })),
-      total: teamTotal,
+      total: result.meta.total,
       page,
       limit,
     };
@@ -943,12 +895,12 @@ class EventService {
   }
 
   /**
-   * Freezes or unfreezes the scoreboard for an event.
-   * Admins can freeze the scoreboard at any time. When frozen, the scoreboard is
-   * locked, and points are no longer awarded or deducted.
-   * @param {FreezeScoreboardPayload} payload - The payload containing the event ID, and
-   *   whether to freeze or unfreeze the scoreboard.
-   * @returns {Promise<IEvent>} - The promise of the event with the updated scoreboard.
+   * Freeze or unfreeze the scoreboard for an event.
+   * Only active events can be frozen.
+   * Throws an ApiError if the event is not found.
+   * @param {FreezeScoreboardPayload} payload - Event ID, whether to freeze (true) or unfreeze (false), and the requesting user's ID and username.
+   * @returns {Promise<IEvent>} - The updated event document.
+   * @throws {ApiError} - If the event is not found or if the scoreboard cannot be frozen/unfrozen.
    */
   async freezeScoreboard(payload: FreezeScoreboardPayload): Promise<IEvent> {
     const { eventId, frozen, requesterId, requesterUsername } = payload;
@@ -958,6 +910,8 @@ class EventService {
 
     // Delegate to model — it enforces active-only constraint
     await event.setScoreboardFrozen(frozen);
+
+    await leaderboardService.setFrozen(event._id as Types.ObjectId, frozen);
 
     await audit({
       action: frozen ? "admin:scoreboard_freeze" : "admin:scoreboard_unfreeze",
