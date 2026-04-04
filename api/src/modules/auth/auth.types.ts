@@ -14,11 +14,15 @@ export type OAuthProfileInput = {
   providerId: string;
   email: string;
   avatar?: string;
+  userAgent: string;
+  ipAddress: string;
 };
 
 export type LoginInput = {
   email: string;
   password: string;
+  userAgent: string;
+  ipAddress: string;
 };
 
 export type changeCurrentPasswordInput = {
