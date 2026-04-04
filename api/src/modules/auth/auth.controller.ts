@@ -19,7 +19,8 @@ import {
 } from "../oauth/github.verify";
 import { cacheService } from "../../services/cacheService";
 import jwt from "jsonwebtoken";
-import { parseBody } from "../../utils/helpers";
+import { getClientIp, parseBody } from "../../utils/helpers";
+import { refreshTokenService } from "../refreshToken/refreshToken.service";
 
 const register = asyncHandler(async (req, res) => {
   const data = parseBody(registerSchema, req.body);
@@ -48,6 +49,8 @@ const login = asyncHandler(async (req, res) => {
 
   const { accessToken, refreshToken, user } = await authService.loginUser({
     ...data,
+    userAgent: req.headers["user-agent"] as string,
+    ipAddress: getClientIp(req) as string,
   });
 
   const options: CookieOptions = {
@@ -94,6 +97,8 @@ const oauthLogin = asyncHandler(async (req, res) => {
     avatar: profile.avatar,
     provider,
     providerId: profile.providerId,
+    userAgent: req.headers["user-agent"] as string,
+    ipAddress: getClientIp(req) as string,
   });
 
   if (!user) {
@@ -114,40 +119,16 @@ const oauthLogin = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, user, "User login successfully"));
 });
 
-const refreshAccessToken = asyncHandler(async (req, res) => {
-  const incomingRefreshToken =
-    req.cookies.refreshToken || req.body.refreshToken; // for mobile app
-
-  if (!incomingRefreshToken) {
-    throw new ApiError(401, "refresh token is required");
-  }
-
-  const { accessToken, refreshToken } =
-    await authService.refreshAccessToken(incomingRefreshToken);
-
-  const options: CookieOptions = {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-  };
-
-  return res
-    .status(200)
-    .cookie("accessToken", accessToken, options)
-    .cookie("refreshToken", refreshToken, options)
-    .json(new ApiResponse(200, {}, "Access token refreshed successfully"));
-});
-
 const logout = asyncHandler(async (req, res) => {
   if (!req.user?._id) {
     throw new ApiError(401, "Unauthorized");
   }
 
-  await User.findByIdAndUpdate(req.user._id, {
-    $unset: {
-      refreshToken: 1,
-    },
-  });
+  const rawToken = req.cookies?.refreshToken;
+
+  if (rawToken) {
+    await refreshTokenService.revokeByRaw(rawToken);
+  }
 
   const options = {
     httpOnly: true,
@@ -176,6 +157,9 @@ const changeCurrentPassword = asyncHandler(async (req, res) => {
   }
 
   await authService.changePassword({ ...data, userId: req.user._id });
+
+  res.clearCookie("refreshToken", { path: "/" });
+  res.clearCookie("accessToken", { path: "/" });
 
   return res
     .status(200)
@@ -221,7 +205,6 @@ export {
   register,
   login,
   logout,
-  refreshAccessToken,
   changeCurrentPassword,
   forgotPassword,
   resetPassword,

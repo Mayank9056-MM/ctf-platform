@@ -76,3 +76,29 @@ export function buildMeta(page: number, limit: number, total: number) {
     hasPrev: page > 1,
   };
 }
+
+import { Request } from "express";
+
+/**
+ * Retrieves the IP address of the client making the request.
+ * It first checks if the "x-forwarded-for" header is present and uses the first IP address in the list.
+ * If the "x-forwarded-for" header is not present, it falls back to the IP address provided by the socket API.
+ * If neither is present, it returns undefined.
+ * @param {Request} req - The express request object.
+ * @returns {string | undefined} The client's IP address.
+ */
+export function getClientIp(req: Request): string | undefined {
+  // 1. Check x-forwarded-for (can contain multiple IPs)
+  const forwarded = req.headers["x-forwarded-for"];
+
+  if (typeof forwarded === "string") {
+    return forwarded.split(",")[0].trim();
+  }
+
+  if (Array.isArray(forwarded)) {
+    return forwarded[0];
+  }
+
+  // 2. Fallbacks
+  return req.socket?.remoteAddress || req.socket?.remoteAddress || undefined;
+}

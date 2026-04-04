@@ -5,7 +5,6 @@ import {
   login,
   logout,
   oauthLogin,
-  refreshAccessToken,
   register,
   resetPassword,
 } from "./auth.controller";
@@ -23,7 +22,6 @@ authRouter.route("/login").post(authRateLimiter, login);
 authRouter.route("/forgot-password").post(forgotPassword);
 authRouter.route("/reset-password/:token").post(resetPassword);
 authRouter.route("/oauth").post(authRateLimiter, oauthLogin);
-authRouter.route("/refresh-token").post(refreshAccessToken);
 
 // Protected Routes
 authRouter.route("/logout").post(verifyAuth, logout);

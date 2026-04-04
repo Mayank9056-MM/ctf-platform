@@ -61,3 +61,5 @@ export const EVENT_FORMATS = [
 ] as const;
 
 export const EVENT_VISIBILITIES = ["public", "invite", "internal"] as const;
+
+export const COOKIE_NAME = "refreshToken";
