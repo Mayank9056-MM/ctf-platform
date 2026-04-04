@@ -13,63 +13,35 @@ import {
   RegisterInput,
   resetPasswordInput,
 } from "./auth.types";
-import jwt from "jsonwebtoken";
 import { EmailService } from "../../services/emailService";
 import crypto from "crypto";
-
-type tokenPair = {
-  accessToken: string;
-  refreshToken: string;
-};
+import { refreshTokenService } from "../refreshToken/refreshToken.service";
+import mongoose from "mongoose";
 
 class AuthService {
-  // helper methods
+  // Helper methods
 
   /**
-   * Issues a new access token and refresh token for a user and saves it to the database.
-   * @param {IUser} user - The user to issue the tokens for.
-   * @returns {Promise<{user: IUser, accessToken: string, refreshToken: string}>} - A promise that resolves to an object containing the user, access token and refresh token.
-   * @throws {ApiError} - If there is an error generating the tokens or saving the user.
+   * Issues a new access and refresh token pair for the given user.
+   * @param {IUser} user - The user to issue tokens for.
+   * @param {OAuthProfileInput} data - The user's OAuth profile data.
+   * @returns {Promise<{accessToken: string, refreshToken: string, user: IUser}>}
+   * A promise that resolves to an object containing the access token, refresh token, and user.
    */
-  private async issueTokens(user: IUser) {
-    const { accessToken, refreshToken } =
-      await this.generateAccessAndRefreshToken(user._id.toString());
+  private async issueTokens(user: IUser, data: OAuthProfileInput) {
+    const accessToken = user.generateAccessToken();
 
-    user.refreshToken = refreshToken;
+    const issuedToken = await refreshTokenService.issue({
+      userId: user._id,
+      userAgent: data.userAgent,
+      ipAddress: data.ipAddress,
+    });
 
-    await user.save({ validateBeforeSave: false });
-
-    return { user, accessToken, refreshToken };
-  }
-
-  /**
-   * Generates an access token and refresh token for a user based on their id.
-   * @param {string} userId - The id of the user.
-   * @returns {Promise<{accessToken: string, refreshToken: string}>} - A promise that resolves to an object containing the access token and refresh token.
-   * @throws {ApiError} - If the user is not found or if there is an error generating the tokens.
-   */
-  async generateAccessAndRefreshToken(userId: string): Promise<tokenPair> {
-    try {
-      const user = await User.findById(userId);
-      if (!user) {
-        throw new ApiError(400, "user not found please register");
-      }
-
-      const accessToken = user.generateAccessToken();
-      const refreshToken = user.generateRefreshToken();
-
-      user.refreshToken = refreshToken;
-
-      await user.save({ validateBeforeSave: false });
-
-      return { accessToken, refreshToken };
-    } catch (error) {
-      logger.error("error generating access and refresh token", error);
-      throw new ApiError(
-        500,
-        "something went wrong while generating access token and refresh token"
-      );
-    }
+    return {
+      accessToken,
+      refreshToken: issuedToken.rawToken,
+      user,
+    };
   }
 
   // main methods
@@ -150,12 +122,6 @@ class AuthService {
     return user;
   }
 
-  /**
-   * Login user
-   * @param {LoginInput} data - Email and password of the user
-   * @returns {Promise<{accessToken: string, refreshToken: string, user: IUser}>} - Object containing access token, refresh token and user object
-   * @throws {ApiError} - If user is not found or invalid credentials are provided
-   */
   async loginUser(data: LoginInput): Promise<{
     accessToken: string;
     refreshToken: string;
@@ -167,31 +133,38 @@ class AuthService {
       throw new ApiError(400, "user not found please register");
     }
 
+    if (user.isBanned || user.isDeleted) {
+      throw new ApiError(403, "Account is inactive");
+    }
+
     const isPasswordMatch = await user.comparePassword(data.password);
 
     if (!isPasswordMatch) {
       throw new ApiError(400, "invalid credentials");
     }
 
-    const { accessToken, refreshToken } =
-      await this.generateAccessAndRefreshToken(user._id.toString());
+    const accessToken = user.generateAccessToken();
 
-    user.refreshToken = refreshToken;
-
-    await user.save({ validateBeforeSave: false });
+    const issuedToken = await refreshTokenService.issue({
+      userId: user?._id,
+      userAgent: data.userAgent,
+      ipAddress: data.ipAddress,
+    });
 
     // remove password
     const userObj = user.toObject();
     delete userObj.password;
 
-    return { accessToken, refreshToken, user: userObj };
+    return { accessToken, refreshToken: issuedToken.rawToken, user: userObj };
   }
 
   /**
-   * Logs in a user with their OAuth profile
-   * @param {OAuthProfileInput} data - OAuth profile data
-   * @returns {Promise<{accessToken: string, refreshToken: string, user: IUser}>} - Object containing access token, refresh token and user object
-   * @throws {ApiError} - If user is not found or invalid credentials are provided
+   * Authenticates a user with the given OAuth provider and providerId.
+   * If a user with the given provider and providerId is found, issues a new access and refresh token pair.
+   * If a user with the given email is found, adds the given provider and providerId to the user's providers list and issues a new access and refresh token pair.
+   * If a user with the given email is not found, creates a new user with the given email and OAuth provider data, and issues a new access and refresh token pair.
+   * @param {OAuthProfileInput} data - The OAuth profile data.
+   * @returns {Promise<{accessToken: string, refreshToken: string, user: Omit<IUser, "password">}>}
    */
   async oauthLogin(data: OAuthProfileInput) {
     let user = await User.findOne({
@@ -199,18 +172,24 @@ class AuthService {
       "providers.providerId": data.providerId,
     });
 
-    // user exits with provider
     if (user) {
-      return await this.issueTokens(user);
+      if (user.isBanned || user.isDeleted) {
+        throw new ApiError(403, "Account is inactive");
+      }
+
+      return this.issueTokens(user, data);
     }
 
     // find by email
-
     user = await User.findOne({ email: data.email });
 
     if (user) {
+      if (user.isBanned || user.isDeleted) {
+        throw new ApiError(403, "Account is inactive");
+      }
+
       const alreadyLinked = user.providers.some(
-        (p) => p.provider === data.provider
+        (p) => p.provider === data.provider && p.providerId === data.providerId
       );
 
       if (!alreadyLinked) {
@@ -219,14 +198,13 @@ class AuthService {
           providerId: data.providerId,
         });
 
-        await user.save();
+        await user.save({ validateBeforeSave: false });
       }
 
-      return this.issueTokens(user);
+      return this.issueTokens(user, data);
     }
 
     // create new user
-
     user = await User.create({
       email: data.email,
       fullName: data.fullName,
@@ -240,40 +218,12 @@ class AuthService {
       isVerified: true,
     });
 
-    return this.issueTokens(user);
+    return this.issueTokens(user, data);
   }
 
   /**
-   * Refresh access token
-   * @param {string} incomingRefreshToken - incoming refresh token
-   * @returns {Promise<{accessToken: string, refreshToken: string}>} - Object containing access token and refresh token
-   * @throws {ApiError} - If invalid refresh token is provided
-   */
-  async refreshAccessToken(incomingRefreshToken: string) {
-    const decodedToken = jwt.verify(
-      incomingRefreshToken,
-      config.REFRESH_TOKEN_SECRET
-    ) as TokenPayload;
-
-    const user = await User.findById(decodedToken?._id).select("+refreshToken");
-
-    if (!user) {
-      throw new ApiError(403, "Invalid refresh token");
-    }
-
-    if (incomingRefreshToken !== user?.refreshToken) {
-      throw new ApiError(403, "Invalid refresh token");
-    }
-
-    const { accessToken, refreshToken } =
-      await this.generateAccessAndRefreshToken(user._id.toString());
-
-    return { accessToken, refreshToken };
-  }
-
-  /**
-   * Change the password of a user
-   * @param {changeCurrentPasswordInput} data - The data to change the password with
+   * Changes the current password for a user
+   * @param {changeCurrentPasswordInput} data - The data to change the current password with
    * @throws {ApiError} - If the user is not found, or if the old password is invalid, or if the new password and confirm password do not match
    * @returns {Promise<void>} - A promise that resolves when the password has been changed successfully
    */
@@ -294,11 +244,23 @@ class AuthService {
       throw new ApiError(406, "confirm password not match");
     }
 
-    user.password = data.newPassword; // auto encrypt before save
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
-    await user.save({ validateBeforeSave: false });
+    try {
+      user.password = data.newPassword; // auto encrypt before save
 
-    return;
+      await user.save({ validateBeforeSave: false });
+
+      await refreshTokenService.revokeAllForUser(user._id, "password_change");
+
+      await session.commitTransaction();
+      session.endSession();
+    } catch (error) {
+      await session.abortTransaction();
+      session.endSession();
+      throw error;
+    }
   }
 
   /**
@@ -353,7 +315,9 @@ class AuthService {
     user.password = data.newPassword;
     user.resetPasswordToken = undefined;
     user.resetPasswordExpire = undefined;
-    await user.save();
+    await user.save({ validateBeforeSave: false });
+
+    await refreshTokenService.revokeAllForUser(user._id, "password_reset");
 
     return;
   }
