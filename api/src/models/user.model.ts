@@ -24,7 +24,6 @@ export interface IUser extends Document {
   solvedChallenges: mongoose.Types.ObjectId[];
   resetPasswordToken?: string;
   resetPasswordExpire?: Date;
-  refreshToken?: string;
   score: number;
   isVerified: boolean;
   password?: string;
@@ -228,15 +227,6 @@ const userSchema = new mongoose.Schema<IUser>(
     },
     emailVerificationExpire: {
       type: Date,
-      select: false,
-    },
-
-    /**
-     * Refresh token for session management
-     */
-
-    refreshToken: {
-      type: String,
       select: false,
     },
     lastActive: {
