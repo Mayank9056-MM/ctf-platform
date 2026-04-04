@@ -98,6 +98,8 @@ import eventRouter from "./modules/events/event.routes";
 import notificationRouter from "./modules/notification/notification.routes";
 import announcementRouter from "./modules/announcement/announcement.routes";
 import userRouter from "./modules/users/user.routes";
+import refreshTokenRouter from "./modules/refreshToken/refreshToken.routes";
+import leaderboardRouter from "./modules/leaderboard/leaderboard.routes";
 
 // routes
 app.use("/api/v1/auth", authRouter);
@@ -110,6 +112,8 @@ app.use("/api/v1/submission", submissionRouter);
 app.use("/api/v1/event", eventRouter);
 app.use("/api/v1/notification", notificationRouter);
 app.use("/api/v1/announcement", announcementRouter);
+app.use("/api/v1/refresh-token", refreshTokenRouter);
+app.use("/api/v1/leaderboard", leaderboardRouter);
 
 // It should be always at bottom
 // 404 handler
