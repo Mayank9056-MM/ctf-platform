@@ -36,7 +36,7 @@ export async function getEventsApi(
   filters: EventListFilters = {},
 ): Promise<{ events: EventSummary[]; meta: PaginationMeta }> {
   const params = buildParams(filters as Record<string, unknown>);
-  const res = await api.get(`/events?${params}`);
+  const res = await api.get(`/api/v1/event/events?${params}`);
   return {
     events: res.data.data.events,
     meta: res.data.data.meta,
@@ -50,7 +50,7 @@ export async function getEventsApi(
  * inviteCode is only returned to organizers/admins.
  */
 export async function getEventDetailApi(idOrSlug: string): Promise<Event> {
-  const res = await api.get<ApiResponse<Event>>(`/events/${idOrSlug}`);
+  const res = await api.get<ApiResponse<Event>>(`/api/v1/event/events/${idOrSlug}`);
   return res.data.data;
 }
 
@@ -63,7 +63,7 @@ export async function registerForEventApi(
   eventId: string,
   inviteCode?: string,
 ): Promise<void> {
-  await api.post(`/events/${eventId}/register`, { inviteCode });
+  await api.post(`/api/v1/event/events/${eventId}/register`, { inviteCode });
 }
 
 // GET /events/:id/leaderboard
@@ -78,7 +78,7 @@ export async function getEventLeaderboardApi(
 ): Promise<EventLeaderboard> {
   const params = buildParams(filters as Record<string, unknown>);
   const res = await api.get<ApiResponse<EventLeaderboard>>(
-    `/events/${eventId}/leaderboard?${params}`,
+    `/api/v1/event/events/${eventId}/leaderboard?${params}`,
   );
   return res.data.data;
 }
@@ -92,7 +92,7 @@ export async function getEventStatsApi(
   eventId: string,
 ): Promise<EventDetailedStats> {
   const res = await api.get<ApiResponse<EventDetailedStats>>(
-    `/events/${eventId}/stats`,
+    `/api/v1/event/events/${eventId}/stats`,
   );
   return res.data.data;
 }
@@ -107,7 +107,7 @@ export async function adminGetEventsApi(
   filters: AdminEventListFilters = {},
 ): Promise<{ events: Event[]; meta: PaginationMeta }> {
   const params = buildParams(filters as Record<string, unknown>);
-  const res = await api.get(`/events/admin?${params}`);
+  const res = await api.get(`/api/v1/event/events/admin?${params}`);
   return {
     events: res.data.data.events,
     meta: res.data.data.meta,
@@ -121,7 +121,7 @@ export async function adminGetEventsApi(
 export async function adminCreateEventApi(
   payload: CreateEventPayload,
 ): Promise<Event> {
-  const res = await api.post<ApiResponse<Event>>("/events/admin", payload);
+  const res = await api.post<ApiResponse<Event>>("/api/v1/event/events/admin", payload);
   return res.data.data;
 }
 
@@ -134,7 +134,7 @@ export async function adminUpdateEventApi(
   payload: UpdateEventPayload,
 ): Promise<Event> {
   const res = await api.patch<ApiResponse<Event>>(
-    `/events/admin/${id}`,
+    `/api/v1/event/events/admin/${id}`,
     payload,
   );
   return res.data.data;
@@ -146,7 +146,7 @@ export async function adminUpdateEventApi(
  * Superadmin only.
  */
 export async function adminDeleteEventApi(id: string): Promise<void> {
-  await api.delete(`/events/admin/${id}`);
+  await api.delete(`/api/v1/event/events/admin/${id}`);
 }
 
 // POST /events/admin/:id/transition
@@ -159,7 +159,7 @@ export async function adminTransitionEventApi(
   status: string,
 ): Promise<Event> {
   const res = await api.post<ApiResponse<Event>>(
-    `/events/admin/${id}/transition`,
+    `/api/v1/event/events/admin/${id}/transition`,
     { status },
   );
   return res.data.data;
@@ -175,7 +175,7 @@ export async function adminFreezeScoreboardApi(
   frozen: boolean,
 ): Promise<Event> {
   const res = await api.post<ApiResponse<Event>>(
-    `/events/admin/${id}/scoreboard/freeze`,
+    `/api/v1/event/events/admin/${id}/scoreboard/freeze`,
     { frozen },
   );
   return res.data.data;
@@ -191,7 +191,7 @@ export async function adminAddChallengesApi(
   challengeIds: string[],
 ): Promise<Event> {
   const res = await api.post<ApiResponse<Event>>(
-    `/events/admin/${id}/challenges`,
+    `/api/v1/event/events/admin/${id}/challenges`,
     { challengeIds },
   );
   return res.data.data;
@@ -207,7 +207,7 @@ export async function adminRemoveChallengesApi(
   challengeIds: string[],
 ): Promise<Event> {
   const res = await api.delete<ApiResponse<Event>>(
-    `/events/admin/${id}/challenges`,
+    `/api/v1/event/events/admin/${id}/challenges`,
     { data: { challengeIds } },
   );
   return res.data.data;
@@ -220,7 +220,7 @@ export async function adminRemoveChallengesApi(
  */
 export async function adminRunAutoTransitionsApi(): Promise<AutoTransitionResult> {
   const res = await api.post<ApiResponse<AutoTransitionResult>>(
-    "/events/admin/auto-transition",
+    "/api/v1/event/events/admin/auto-transition",
   );
   return res.data.data;
 }

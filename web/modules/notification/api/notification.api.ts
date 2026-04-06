@@ -29,7 +29,7 @@ function buildParams(obj: Record<string, unknown>): URLSearchParams {
  */
 export async function getInboxSummaryApi(): Promise<InboxSummary> {
   const res = await api.get<ApiResponse<InboxSummary>>(
-    "/notifications/summary",
+    "/api/v1/notification/notifications/summary",
   );
   return res.data.data;
 }
@@ -44,7 +44,7 @@ export async function getNotificationsApi(
 ): Promise<NotificationList> {
   const params = buildParams(filters as Record<string, unknown>);
   const res = await api.get<ApiResponse<NotificationList>>(
-    `/notifications?${params}`,
+    `/api/v1/notification/notifications?${params}`,
   );
   return res.data.data;
 }
@@ -56,7 +56,7 @@ export async function getNotificationsApi(
 export async function getNotificationByIdApi(
   id: string,
 ): Promise<Notification> {
-  const res = await api.get<ApiResponse<Notification>>(`/notifications/${id}`);
+  const res = await api.get<ApiResponse<Notification>>(`/api/v1/notification/notifications/${id}`);
   return res.data.data;
 }
 
@@ -71,7 +71,7 @@ export async function markNotificationsReadApi(
   const body =
     notificationIds && notificationIds.length > 0 ? { notificationIds } : {};
   const res = await api.patch<ApiResponse<{ updated: number }>>(
-    "/notifications/read",
+    "/api/v1/notification/notifications/read",
     body,
   );
   return res.data.data;
@@ -83,7 +83,7 @@ export async function markNotificationsReadApi(
  * $addToSet — idempotent.
  */
 export async function dismissNotificationApi(id: string): Promise<void> {
-  await api.post(`/notifications/${id}/dismiss`);
+  await api.post(`/api/v1/notification/notifications/${id}/dismiss`);
 }
 
 // DELETE /notifications/:id
@@ -92,7 +92,7 @@ export async function dismissNotificationApi(id: string): Promise<void> {
  * Does not work on broadcasts — use dismiss for those.
  */
 export async function deleteNotificationApi(id: string): Promise<void> {
-  await api.delete(`/notifications/${id}`);
+  await api.delete(`/api/v1/notification/notifications/${id}`);
 }
 
 // DELETE /notifications
@@ -102,7 +102,7 @@ export async function deleteNotificationApi(id: string): Promise<void> {
  */
 export async function clearInboxApi(): Promise<{ cleared: number }> {
   const res =
-    await api.delete<ApiResponse<{ cleared: number }>>("/notifications");
+    await api.delete<ApiResponse<{ cleared: number }>>("/api/v1/notification/notifications");
   return res.data.data;
 }
 
@@ -117,7 +117,7 @@ export async function adminDispatchNotificationApi(
   payload: AdminDispatchPayload,
 ): Promise<Notification> {
   const res = await api.post<ApiResponse<Notification>>(
-    "/notifications/admin/dispatch",
+    "/api/v1/notification/notifications/admin/dispatch",
     payload,
   );
   return res.data.data;
@@ -132,7 +132,7 @@ export async function adminGetNotificationsApi(
 ): Promise<NotificationList> {
   const params = buildParams(filters as Record<string, unknown>);
   const res = await api.get<ApiResponse<NotificationList>>(
-    `/notifications/admin?${params}`,
+    `/api/v1/notification/notifications/admin?${params}`,
   );
   return res.data.data;
 }
@@ -143,7 +143,7 @@ export async function adminGetNotificationsApi(
  */
 export async function adminGetNotificationStatsApi(): Promise<NotificationStats> {
   const res = await api.get<ApiResponse<NotificationStats>>(
-    "/notifications/admin/stats",
+    "/api/v1/notification/notifications/admin/stats",
   );
   return res.data.data;
 }
@@ -156,7 +156,7 @@ export async function adminGetNotificationByIdApi(
   id: string,
 ): Promise<Notification> {
   const res = await api.get<ApiResponse<Notification>>(
-    `/notifications/admin/${id}`,
+    `/api/v1/notification/notifications/admin/${id}`,
   );
   return res.data.data;
 }
@@ -169,7 +169,7 @@ export async function adminMarkNotificationReadApi(
   id: string,
 ): Promise<Notification> {
   const res = await api.patch<ApiResponse<Notification>>(
-    `/notifications/admin/${id}/read`,
+    `/api/v1/notification/notifications/admin/${id}/read`,
   );
   return res.data.data;
 }
@@ -179,5 +179,5 @@ export async function adminMarkNotificationReadApi(
  * Hard-delete. Superadmin only. For GDPR / content removal.
  */
 export async function adminDeleteNotificationApi(id: string): Promise<void> {
-  await api.delete(`/notifications/admin/${id}`);
+  await api.delete(`/api/v1/notification/notifications/admin/${id}`);
 }
