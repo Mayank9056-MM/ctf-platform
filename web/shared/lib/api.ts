@@ -170,7 +170,7 @@ function showStatusToast(
 
 const api: AxiosInstance = axios.create({
   baseURL: clientConfig.NEXT_PUBLIC_API_URL,
-  withCredentials: true, // sends httpOnly cookies on every request
+  withCredentials: true,
   timeout: 15_000,
   headers: {
     "Content-Type": "application/json",
@@ -221,7 +221,7 @@ api.interceptors.response.use(
 
       try {
         // Attempt to refresh using the httpOnly refresh token cookie
-        await api.post("/api/v1/auth/refresh-token", {}, {
+        await api.post("/api/v1/refresh-token/auth/refresh", {}, {
           _silentAuth: true,
         } as AxiosRequestConfig);
 
