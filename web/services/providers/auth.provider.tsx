@@ -15,6 +15,7 @@ const REDIRECT_REASON_MESSAGES: Record<string, string> = {
   banned: "Your account has been suspended.",
   deleted: "This account no longer exists.",
   token_invalid: "Invalid session token. Please sign in again.",
+  reuse_detected: "Suspicious session activity detected. Please sign in again.",
 };
 
 // Session hydrator
