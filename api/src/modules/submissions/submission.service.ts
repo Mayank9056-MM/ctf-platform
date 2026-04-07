@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { Types } from "mongoose";
+import mongoose, { Types } from "mongoose";
 import {
   FLAG_SHARE_ALERT_THRESHOLD,
   MAX_FLAG_ATTEMPTS_PER_WINDOW,
@@ -26,6 +26,8 @@ import Team from "../../models/team.model";
 import AuditLog, { IAuditLogModel } from "../../models/auditlog.model";
 import { storyService } from "../story/story.service";
 import { leaderboardService } from "../leaderboard/leaderboard.service";
+import { rateLimitCache } from "../../lib/redis";
+import { socketEmit } from "../../socket/socket.emitters";
 
 type solveWithRank = ISubmission & { rank: number };
 
@@ -119,30 +121,20 @@ function yesterdayUtc(): string {
 class SubmissionService {
   /**
    * Submits a flag for a challenge.
-   * Verifies the flag against the challenge's flag. If correct, increments the challenge's solve count and awards points to the user and/or team.
-   * If the user has already solved the challenge, returns 409.
-   * If the team has already solved the challenge, returns 409.
-   * If the challenge is closed, returns 400.
-   * If the user has too many recent incorrect attempts, returns 429.
-   * @param payload - The submission payload containing the user ID, team ID, challenge ID, flag, IP address, and user agent.
-   * @returns A promise resolving to a SubmitFlagResult object containing the correctness of the flag, points awarded, whether it was the first blood, the new score of the user, and a message.
-   * @throws ApiError - If the challenge is not found, the user has already solved the challenge, the team has already solved the challenge, the challenge is closed, or the user has too many recent incorrect attempts.
+   * @param {SubmitFlagPayload} payload - An object containing the user ID, team ID (optional), challenge ID, flag, IP address and user agent (optional).
+   * @returns {Promise<SubmitFlagResult>} - A promise which resolves to an object containing the result of the submission, points awarded, first blood status, and a message.
+   * @throws {ApiError} 404 - If the challenge is not found.
+   * @throws {ApiError} 429 - If the user has attempted to submit more than MAX_FLAG_ATTEMPTS_PER_WINDOW flags in the last minute.
+   * @throws {ApiError} 400 - If the challenge has closed.
+   * @throws {ApiError} 409 - If the user or team has already solved the challenge.
    */
   async submitFlag(payload: SubmitFlagPayload): Promise<SubmitFlagResult> {
     const { userId, teamId, challengeId, flag, ip, userAgent } = payload;
 
-    const challengeObjId = new Types.ObjectId(challengeId);
+    const count = await rateLimitCache.count(userId.toString(), challengeId);
 
-    const recentFails = await (
-      Submission as unknown as ISubmissionModel
-    ).countRecentFailures(userId, challengeObjId, RATE_LIMIT_WINDOW_MS);
-
-    if (recentFails >= MAX_FLAG_ATTEMPTS_PER_WINDOW) {
-      throw new ApiError(
-        429,
-        `Too many incorrect attempts. Wait before trying again. ` +
-          `(${recentFails}/${MAX_FLAG_ATTEMPTS_PER_WINDOW} in the last minute)`
-      );
+    if (count >= MAX_FLAG_ATTEMPTS_PER_WINDOW) {
+      throw new ApiError(429, "Too many incorrect attempts");
     }
 
     const challenge = await Challenge.findOne({
@@ -218,15 +210,19 @@ class SubmissionService {
     if (!isCorrect) {
       await challenge.save({ validateBeforeSave: false });
 
+      const attempts = await rateLimitCache.increment(
+        userId.toString(),
+        challengeId
+      );
+
       return {
         isCorrect: false,
         pointsAwarded: 0,
         isFirstBlood: false,
-        attemptsInWindow: recentFails + 1,
-        message: `Incorrect flag. Try again. (${recentFails + 1}/${MAX_FLAG_ATTEMPTS_PER_WINDOW} attempts this minute)`,
+        attemptsInWindow: attempts,
+        message: `Incorrect flag. Try again. (${attempts}/${MAX_FLAG_ATTEMPTS_PER_WINDOW} attempts this minute)`,
       };
     }
-
     const [updatedUser] = await Promise.all([
       User.findByIdAndUpdate(
         userId,
@@ -260,6 +256,36 @@ class SubmissionService {
         );
     }
 
+    socketEmit.correctSolve(userId.toString(), {
+      challengeId,
+      challengeTitle: challenge.title,
+      pointsAwarded,
+      newScore: updatedUser?.score ?? 0,
+      rank: 0,
+    });
+
+    if (isFirstBlood) {
+      socketEmit.firstBlood({
+        challengeId,
+        challengeTitle: challenge.title,
+        userId: userId.toString(),
+        username: "...", // fetch from user doc
+        teamId: teamId?.toString(),
+        teamName: "...",
+        pointsAwarded,
+      });
+    }
+
+    if (teamId) {
+      socketEmit.teamChallengeSolved({
+        teamId: teamId.toString(),
+        challengeId,
+        challengeTitle: challenge.title,
+        solverUsername: "...",
+        pointsAwarded,
+      });
+    }
+
     // Anti-cheat tracking
     trackFlagShare(challengeId, submittedHash, ip);
 
@@ -291,14 +317,16 @@ class SubmissionService {
         logger.error("[SubmissionService] Audit log write failed", err)
       );
 
+    const totalAttempts = await Submission.countDocuments({
+      user: userId,
+      challenge: challengeId,
+    });
+
+    await rateLimitCache.reset(userId.toString(), challengeId);
+
     // Story hook (fire-and-forget)
     storyService
-      .notifyChallengeSolved(
-        challengeId,
-        userId,
-        pointsAwarded,
-        recentFails + 1
-      )
+      .notifyChallengeSolved(challengeId, userId, pointsAwarded, totalAttempts)
       .catch((err) =>
         logger.warn(
           `[SubmissionService] Story hook failed for challenge ${challengeId}: ${err?.message}`
@@ -399,7 +427,10 @@ class SubmissionService {
     if (!challengeExists) throw new ApiError(404, "Challenge not found");
 
     const [submissions, total] = await Promise.all([
-      Submission.find({ user: userId, challenge: challengeId })
+      Submission.find({
+        user: userId,
+        challenge: challengeId,
+      })
         .select(
           "isCorrect pointsAwarded isFirstBlood meta.solveTimeSeconds createdAt"
         )
@@ -407,7 +438,11 @@ class SubmissionService {
         .skip((page - 1) * limit)
         .limit(limit)
         .lean(),
-      Submission.countDocuments({ user: userId, challenge: challengeId }),
+
+      Submission.countDocuments({
+        user: userId,
+        challenge: challengeId,
+      }),
     ]);
 
     return { submissions, total, page, limit };

@@ -8,6 +8,7 @@ import { ApiResponse } from "../../utils/ApiResponse";
 import { parseBody } from "../../utils/helpers";
 import { revokeSessionSchema } from "./refreshToken.validator";
 import { ApiError } from "../../utils/ApiError";
+import User from "../../models/user.model";
 
 /**
  * Generates an options object for setting a cookie.
@@ -129,7 +130,6 @@ export const rotateRefreshToken = asyncHandler(async (req, res) => {
   });
 
   // Issue a fresh access token
-  const { default: User } = await import("../../models/user.model");
   const user = await User.findById(userId).select(
     "username email role isBanned isDeleted"
   );

@@ -1,3 +1,4 @@
+import { clientConfig } from "@/config/client";
 import { io, Socket } from "socket.io-client";
 
 // Event types
@@ -103,8 +104,8 @@ let socket: AppSocket | null = null;
 export function getSocket(): AppSocket {
   if (!socket) {
     socket = io(
-      process.env.NEXT_PUBLIC_SOCKET_URL ??
-        process.env.NEXT_PUBLIC_API_URL ??
+      clientConfig.NEXT_PUBLIC_SOCKET_URL ??
+        clientConfig.NEXT_PUBLIC_API_URL ??
         "",
       {
         // Don't connect immediately — connect once the user is authenticated

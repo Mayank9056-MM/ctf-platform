@@ -1,4 +1,3 @@
-import escapeStringRegexp from "escape-string-regexp";
 import AuditLog, { IAuditLogModel } from "../../models/auditlog.model";
 import logger from "../../utils/logger";
 import {
@@ -25,6 +24,7 @@ import Submission from "../../models/submission.model";
 import Team from "../../models/team.model";
 import Challenge from "../../models/challenge.model";
 import { leaderboardService } from "../leaderboard/leaderboard.service";
+import { socketEmit } from "../../socket/socket.emitters";
 
 /**
  * Write an audit log entry.
@@ -80,6 +80,8 @@ class EventService {
     }
 
     if (format) query.format = format;
+
+    const escapeStringRegexp = (await import("escape-string-regexp")).default;
 
     if (search) {
       query.$or = [
@@ -632,6 +634,8 @@ class EventService {
       ...rest
     } = payload;
 
+    const escapeStringRegexp = (await import("escape-string-regexp")).default;
+
     const exists = await Event.findOne({
       name: {
         $regex: new RegExp(`^${escapeStringRegexp(rest.name)}$`, "i"),
@@ -734,6 +738,8 @@ class EventService {
         `Event is "${event.status}" and can no longer be modified`
       );
     }
+
+    const escapeStringRegexp = (await import("escape-string-regexp")).default;
 
     if (rest.name && rest.name !== event.name) {
       const dup = await Event.findOne({
@@ -863,6 +869,13 @@ class EventService {
     // Delegates to model method which enforces the transition graph
     await event.transitionTo(newStatus, requesterId);
 
+    socketEmit.eventStatusChanged({
+      eventId: event._id.toString(),
+      slug: event.slug,
+      name: event.name,
+      status: event.status,
+    });
+
     const actionMap: Record<EventStatus, string> = {
       active: "admin:event_start",
       ended: "admin:event_end",
@@ -910,6 +923,12 @@ class EventService {
 
     // Delegate to model — it enforces active-only constraint
     await event.setScoreboardFrozen(frozen);
+
+    socketEmit.scoreboardFrozen({
+      eventId: event._id.toString(),
+      frozen,
+      frozenAt: frozen ? new Date().toISOString() : undefined,
+    });
 
     await leaderboardService.setFrozen(event._id as Types.ObjectId, frozen);
 
@@ -1134,6 +1153,8 @@ class EventService {
     if (organizerId) query.organizers = new Types.ObjectId(organizerId);
     if (autoTransition !== undefined) query.autoTransition = autoTransition;
 
+    const escapeStringRegexp = (await import("escape-string-regexp")).default;
+
     if (search) {
       query.$or = [
         { name: { $regex: escapeStringRegexp(search), $options: "i" } },
@@ -1186,12 +1207,24 @@ class EventService {
       try {
         if (event.status === "scheduled" && event.opensAt <= new Date()) {
           await event.transitionTo("active");
+          socketEmit.eventStatusChanged({
+            eventId: event._id.toString(),
+            slug: event.slug,
+            name: event.name,
+            status: event.status,
+          });
           activated.push(event._id.toString());
           logger.info(
             `[EventService] Auto-activated event "${event.name}" (${event._id})`
           );
         } else if (event.status === "active" && event.closedAt <= new Date()) {
           await event.transitionTo("ended");
+          socketEmit.eventStatusChanged({
+            eventId: event._id.toString(),
+            slug: event.slug,
+            name: event.name,
+            status: event.status,
+          });
           ended.push(event._id.toString());
           logger.info(
             `[EventService] Auto-ended event "${event.name}" (${event._id})`

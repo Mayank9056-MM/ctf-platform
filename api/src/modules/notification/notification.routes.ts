@@ -56,7 +56,7 @@ notificationRouter.delete(
  * POST   /notifications/:id/dismiss      → dismiss a broadcast
  * DELETE /notifications/:id              → soft-delete personal notification
  */
-notificationRouter.get("/summary", verifyAuth, getInboxSummary);
+notificationRouter.get("/notifications/summary", verifyAuth, getInboxSummary);
 notificationRouter.get("/", verifyAuth, getMyNotifications);
 notificationRouter.patch("/read", verifyAuth, markAsRead);
 notificationRouter.delete("/", verifyAuth, clearMyInbox);

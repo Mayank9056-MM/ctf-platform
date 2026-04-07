@@ -14,6 +14,7 @@ import logger from "../../utils/logger";
 import User from "../../models/user.model";
 import Submission from "../../models/submission.model";
 import Team from "../../models/team.model";
+import Event from "../../models/event.model";
 
 /** How many entries to store in the embedded snapshot */
 const SNAPSHOT_TOP_N = 500;
@@ -370,7 +371,6 @@ class LeaderboardService {
     eventId: Types.ObjectId
   ): Promise<ComputedBoardData> {
     // Get all challenge IDs for this event
-    const { default: Event } = await import("../../models/event.model");
     const event = await Event.findById(eventId)
       .select("challenges scoring.scoreboardFrozen scoring.scoreboardFrozenAt")
       .lean();
@@ -462,7 +462,6 @@ class LeaderboardService {
   private async computeEventTeamBoard(
     eventId: Types.ObjectId
   ): Promise<ComputedBoardData> {
-    const { default: Event } = await import("../../models/event.model");
     const event = await Event.findById(eventId)
       .select("challenges scoring.scoreboardFrozen scoring.scoreboardFrozenAt")
       .lean();
