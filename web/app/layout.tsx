@@ -4,6 +4,7 @@ import "./globals.css";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryProvider } from "@/services/providers/query.provider";
 import { AuthProvider } from "@/services/providers/auth.provider";
+import { SocketProvider } from "@/services/providers/SocketProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,7 +33,11 @@ export default function RootLayout({
       >
         <TooltipProvider>
           <QueryProvider>
-            <AuthProvider>{children}</AuthProvider>
+            <AuthProvider>
+              <SocketProvider>
+                <main>{children}</main>
+              </SocketProvider>
+            </AuthProvider>
           </QueryProvider>
         </TooltipProvider>
       </body>
