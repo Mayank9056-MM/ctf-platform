@@ -1,8 +1,14 @@
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { getAnnouncementFeedApi } from "../api/announcement.api";
 import { announcementKeys } from "../queries/announcement.keys";
 import { AnnouncementFeedFilters } from "../types/announcement.types";
 import { useAnnouncementStore } from "../store/announcement";
+import { useEffect, useMemo } from "react";
+import { getSocket } from "@/shared/lib/socket";
 
 /**
  * Participant-facing feed. Merges server dismiss state with local
@@ -14,23 +20,44 @@ import { useAnnouncementStore } from "../store/announcement";
 export function useAnnouncementFeed(
   extraFilters: AnnouncementFeedFilters = {},
 ) {
-const page = useAnnouncementStore((s) => s.feedPage);
-const severityFilter = useAnnouncementStore((s) => s.feedSeverityFilter);
-const dismissedIds = useAnnouncementStore((s) => s.dismissedIds);
+  const queryClient = useQueryClient();
 
-  const filters: AnnouncementFeedFilters = {
-    page,
-    limit: 10,
-    ...extraFilters,
-    ...(severityFilter !== "all" && { severity: severityFilter }),
-  };
+  const page = useAnnouncementStore((s) => s.feedPage);
+  const severityFilter = useAnnouncementStore((s) => s.feedSeverityFilter);
+  const dismissedIds = useAnnouncementStore((s) => s.dismissedIds);
+
+  const filters: AnnouncementFeedFilters = useMemo(
+    () => ({
+      page,
+      limit: 10,
+      ...extraFilters,
+      ...(severityFilter !== "all" && { severity: severityFilter }),
+    }),
+    [page, extraFilters, severityFilter],
+  );
 
   const query = useQuery({
     queryKey: announcementKeys.feed(filters),
     queryFn: () => getAnnouncementFeedApi(filters),
-    staleTime: 1000 * 60 * 2, // 2 min
+    staleTime: Infinity,
     placeholderData: keepPreviousData,
   });
+
+  useEffect(() => {
+    const socket = getSocket();
+
+    const handler = () => {
+      queryClient.invalidateQueries({
+        queryKey: announcementKeys.feed(filters),
+      });
+    };
+
+    socket.on("announcement:published", handler);
+
+    return () => {
+      socket.off("announcement:published", handler);
+    };
+  }, [queryClient, filters]);
 
   // Merge: filter out IDs the user dismissed this session (optimistic)
   const announcements = (query.data?.announcements ?? []).filter(
