@@ -21,6 +21,8 @@ import { cacheService } from "../../services/cacheService";
 import jwt from "jsonwebtoken";
 import { getClientIp, parseBody } from "../../utils/helpers";
 import { refreshTokenService } from "../refreshToken/refreshToken.service";
+import { config } from "../../config/config";
+import ms from "ms";
 
 const register = asyncHandler(async (req, res) => {
   const data = parseBody(registerSchema, req.body);
@@ -53,17 +55,26 @@ const login = asyncHandler(async (req, res) => {
     ipAddress: getClientIp(req) as string,
   });
 
-  const options: CookieOptions = {
+  const isProd = config.NODE_ENV === "production";
+
+  res.cookie("accessToken", accessToken, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
+    secure: isProd,
+    sameSite: isProd ? ("strict" as const) : ("lax" as const),
     path: "/",
-  };
+    maxAge: ms(config.ACCESS_TOKEN_EXPIRY as ms.StringValue),
+  });
+
+  res.cookie("refreshToken", refreshToken, {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: isProd ? ("strict" as const) : ("lax" as const),
+    path: "/",
+    maxAge: ms(config.REFRESH_TOKEN_EXPIRY as ms.StringValue),
+  });
 
   return res
     .status(200)
-    .cookie("accessToken", accessToken, options)
-    .cookie("refreshToken", refreshToken, options)
     .json(new ApiResponse(200, user, "User login successfully"));
 });
 

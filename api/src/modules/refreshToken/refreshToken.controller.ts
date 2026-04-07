@@ -1,5 +1,3 @@
-import express from "express";
-import { verifyAuth } from "../../middlewares/verifyAuth.middleware";
 import { config } from "../../config/config";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { COOKIE_NAME } from "../../utils/constants";
@@ -9,26 +7,7 @@ import { parseBody } from "../../utils/helpers";
 import { revokeSessionSchema } from "./refreshToken.validator";
 import { ApiError } from "../../utils/ApiError";
 import User from "../../models/user.model";
-
-/**
- * Generates an options object for setting a cookie.
- * @param {Date} expiresAt - the date the cookie should expire
- * @returns {Object} - an object with the following properties:
- *   httpOnly: {boolean} - whether the cookie should be accessible only by the web server
- *   secure: {boolean} - whether the cookie should be sent over a secure channel
- *   sameSite: {string} - whether the cookie should be restricted to a first-party or same-site context
- *   expires: {Date} - the date the cookie should expire
- *   path: {string} - the path for which the cookie is valid
- */
-function cookieOptions(expiresAt: Date) {
-  return {
-    httpOnly: true,
-    secure: config.NODE_ENV === "production",
-    sameSite: "strict" as const,
-    expires: expiresAt,
-    path: "/",
-  };
-}
+import ms from "ms";
 
 // GET /auth/sessions
 
@@ -140,16 +119,26 @@ export const rotateRefreshToken = asyncHandler(async (req, res) => {
 
   const accessToken = user.generateAccessToken();
 
+  const isProd = config.NODE_ENV === "production";
+
   // Set the new refresh token cookie
-  res.cookie(
-    COOKIE_NAME,
-    issuedToken.rawToken,
-    cookieOptions(issuedToken.expiresAt)
-  );
+  res.cookie(COOKIE_NAME, issuedToken.rawToken, {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: isProd ? ("strict" as const) : ("lax" as const),
+    maxAge: ms(config.REFRESH_TOKEN_EXPIRY as ms.StringValue),
+    path: "/",
+  });
+
+  res.cookie("accessToken", accessToken, {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: isProd ? ("strict" as const) : ("lax" as const),
+    maxAge: ms(config.ACCESS_TOKEN_EXPIRY as ms.StringValue),
+    path: "/",
+  });
 
   return res
     .status(200)
-    .json(
-      new ApiResponse(200, { accessToken }, "Token refreshed successfully")
-    );
+    .json(new ApiResponse(200, {}, "Token refreshed successfully"));
 });
