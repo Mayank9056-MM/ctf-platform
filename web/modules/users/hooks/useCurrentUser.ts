@@ -8,14 +8,14 @@ export const useCurrentUser = () => {
   return useQuery({
     queryKey: ["auth", "me"],
     queryFn: async () => {
-      const res = await getMeApi();
-      setUser(res.data);
-      return res.data;
+      const data = await getMeApi();
+      setUser(data);
+      return data;
     },
     retry: false,
     staleTime: 1000 * 60 * 5, // 5 min
     gcTime: 1000 * 60 * 10, // 10 min
-  refetchOnWindowFocus: false,
-    refetchOnReconnect: false,  
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 };

@@ -1,5 +1,5 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { useAnnouncementStore } from "../../store/annoucement.store";
+import { useAnnouncementStore } from "../../store/announcement";
 import { AdminAnnouncementFilters } from "../../types/announcement.types";
 import { announcementKeys } from "../../queries/announcement.keys";
 import { adminGetAnnouncementsApi } from "../../api/announcement.api";

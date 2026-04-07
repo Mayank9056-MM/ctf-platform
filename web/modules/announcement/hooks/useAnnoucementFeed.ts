@@ -2,7 +2,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { getAnnouncementFeedApi } from "../api/announcement.api";
 import { announcementKeys } from "../queries/announcement.keys";
 import { AnnouncementFeedFilters } from "../types/announcement.types";
-import { useAnnouncementStore } from "../store/annoucement.store";
+import { useAnnouncementStore } from "../store/announcement";
 
 /**
  * Participant-facing feed. Merges server dismiss state with local
@@ -14,11 +14,9 @@ import { useAnnouncementStore } from "../store/annoucement.store";
 export function useAnnouncementFeed(
   extraFilters: AnnouncementFeedFilters = {},
 ) {
-  const { page, severityFilter, dismissedIds } = useAnnouncementStore((s) => ({
-    page: s.feedPage,
-    severityFilter: s.feedSeverityFilter,
-    dismissedIds: s.dismissedIds,
-  }));
+const page = useAnnouncementStore((s) => s.feedPage);
+const severityFilter = useAnnouncementStore((s) => s.feedSeverityFilter);
+const dismissedIds = useAnnouncementStore((s) => s.dismissedIds);
 
   const filters: AnnouncementFeedFilters = {
     page,

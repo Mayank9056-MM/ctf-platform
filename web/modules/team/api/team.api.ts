@@ -56,7 +56,7 @@ export async function searchTeamsApi(
   params: SearchTeamParams = {},
 ): Promise<{ teams: TeamSearchResult[]; meta: PaginationMeta }> {
   const qs = buildParams(params as Record<string, unknown>);
-  const res = await api.get(`/api/v1/team/teams/search?${qs}`);
+  const res = await api.get(`/api/v1/team/search?${qs}`);
   return {
     teams: res.data.data.teams,
     meta: res.data.data.meta,
@@ -92,7 +92,10 @@ export async function getMyTeamApi(): Promise<Team | null> {
  * @throws {ApiError} If the request fails
  */
 export async function createTeamApi(payload: CreateTeamPayload): Promise<Team> {
-  const res = await api.post<ApiResponse<{ team: Team }>>("/api/v1/team/teams/", payload);
+  const res = await api.post<ApiResponse<{ team: Team }>>(
+    "/api/v1/team/",
+    payload,
+  );
   return res.data.data.team;
 }
 
@@ -115,7 +118,7 @@ export async function updateTeamApi(
   payload: UpdateTeamPayload,
 ): Promise<Team> {
   const res = await api.patch<ApiResponse<{ team: Team }>>(
-    `/api/v1/team/teams/${teamId}`,
+    `/api/v1/team/${teamId}`,
     payload,
   );
   return res.data.data.team;
@@ -132,7 +135,7 @@ export async function updateTeamApi(
  * @throws {ApiError} If the request fails
  */
 export async function joinTeamByCodeApi(code: string): Promise<Team> {
-  const res = await api.post<ApiResponse<{ team: Team }>>("/api/v1/team/teams/join", {
+  const res = await api.post<ApiResponse<{ team: Team }>>("/api/v1/team/join", {
     code: code.toUpperCase().trim(),
   });
   return res.data.data.team;
@@ -147,7 +150,7 @@ export async function joinTeamByCodeApi(code: string): Promise<Team> {
  * @throws {ApiError} If the request fails
  */
 export async function leaveTeamApi(): Promise<void> {
-  await api.post("/api/v1/team/teams/leave");
+  await api.post("/api/v1/team/leave");
 }
 
 // POST /teams/:id/join-code
@@ -161,7 +164,7 @@ export async function leaveTeamApi(): Promise<void> {
  */
 export async function generateJoinCodeApi(teamId: string): Promise<string> {
   const res = await api.post<ApiResponse<{ joinCode: string }>>(
-    `/api/v1/team/teams/${teamId}/join-code`,
+    `/api/v1/team/${teamId}/join-code`,
   );
   return res.data.data.joinCode;
 }
@@ -180,7 +183,7 @@ export async function inviteUserApi(
   teamId: string,
   username: string,
 ): Promise<void> {
-  await api.post(`/api/v1/team/teams/${teamId}/invite`, { username });
+  await api.post(`/api/v1/team/${teamId}/invite`, { username });
 }
 
 // POST /teams/:id/accept-invite
@@ -193,7 +196,7 @@ export async function inviteUserApi(
  */
 export async function acceptInviteApi(teamId: string): Promise<Team> {
   const res = await api.post<ApiResponse<{ team: Team }>>(
-    `/api/v1/team/teams/${teamId}/accept-invite`,
+    `/api/v1/team/${teamId}/accept-invite`,
   );
   return res.data.data.team;
 }
@@ -206,7 +209,7 @@ export async function acceptInviteApi(teamId: string): Promise<Team> {
  * @throws {ApiError} If the request fails
  */
 export async function declineInviteApi(teamId: string): Promise<void> {
-  await api.post(`/api/v1/team/teams/${teamId}/decline-invite`);
+  await api.post(`/api/v1/team/${teamId}/decline-invite`);
 }
 
 // DELETE /teams/:id/members/:userId
@@ -221,7 +224,7 @@ export async function kickMemberApi(
   teamId: string,
   userId: string,
 ): Promise<void> {
-  await api.delete(`/api/v1/team/teams/${teamId}/members/${userId}`);
+  await api.delete(`/api/v1/team/${teamId}/members/${userId}`);
 }
 
 // DELETE /teams/:id/disband (admin)
@@ -233,5 +236,5 @@ export async function kickMemberApi(
  * @throws {ApiError} If the request fails
  */
 export async function adminDisbandTeamApi(teamId: string): Promise<void> {
-  await api.delete(`/api/v1/team/teams/${teamId}/disband`);
+  await api.delete(`/api/v1/team/${teamId}/disband`);
 }

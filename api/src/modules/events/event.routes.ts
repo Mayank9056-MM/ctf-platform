@@ -64,7 +64,7 @@ eventRouter.delete("/admin/:id/challenges", adminGuard, adminRemoveChallenges);
  * GET  /events/:id/leaderboard     → leaderboard (public, respects freeze)
  * GET  /events/:id/stats           → event stats (public)
  */
-eventRouter.get("/", optionalAuth, getEvents);
+eventRouter.get("/events", optionalAuth, getEvents);
 eventRouter.get("/:idOrSlug", optionalAuth, getEventDetail);
 eventRouter.post("/:id/register", verifyAuth, registerForEvent);
 eventRouter.get("/:id/leaderboard", getEventLeaderboard);

@@ -31,7 +31,7 @@ teamRouter.route("/search").post(searchTeams);
 // PRIVATE ROUTES
 
 // POST /teams (create team)
-// GET /teams/my (get my team)
+// GET /my (get my team)
 // PATCH /teams/:id (update team settings - owner only)
 // POST /teams/join (join team by join code)
 // POST /teams/leave (leave team)

@@ -28,7 +28,6 @@ export const getMeApi = async (): Promise<UserProfile> => {
       "/api/v1/user/current-user",
     );
 
-    console.log(res, "res**************************************");
     return res.data.data;
   } catch (error) {
     console.error("Error fetching user info:", error);

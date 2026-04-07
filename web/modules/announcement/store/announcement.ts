@@ -1,4 +1,3 @@
-// modules/announcements/lib/announcement.store.ts
 import { create } from "zustand";
 import { devtools, persist } from "zustand/middleware";
 import { AdminAnnouncementFilters, AnnouncementSeverity, AnnouncementUIState } from "../types/announcement.types";
