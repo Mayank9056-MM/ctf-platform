@@ -19,6 +19,7 @@ import Announcement, {
   IAnnouncement,
   IAnnouncementModel,
 } from "../../models/anouncement.model";
+import { socketEmit } from "../../socket/socket.emitters";
 
 // Internal Helpers
 
@@ -422,6 +423,13 @@ class AnnouncementService {
 
     // Model's publish() method stamps publishedAt and is idempotent
     await announcement.publish();
+
+    socketEmit.announcementPublished({
+      _id: announcement._id.toString(),
+      title: announcement.title,
+      severity: announcement.severity,
+      audience: announcement.audience,
+    });
 
     await audit({
       action: "announcement:publish",
