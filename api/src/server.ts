@@ -37,11 +37,10 @@ process.on("uncaughtException", (error) => {
 });
 
 // Start server
-const server = app.listen(PORT, async () => {
+(async () => {
   try {
     await connectDB();
     await connectRedis();
-
     await getRedis();
 
     await initSocket(httpServer);
@@ -49,23 +48,22 @@ const server = app.listen(PORT, async () => {
     // Initialize email service
     EmailService.initialize();
 
-    const server = app.listen(PORT, () => {
+    httpServer.listen(PORT, () => {
       logger.info(
         `🚀 Server is running on port ${PORT} in ${config.NODE_ENV} mode`
       );
 
       logger.info("📦 Database connection:", getDBStatus());
+      logger.info("📊 Available endpoints:");
+      logger.info(`   Health check: http://localhost:${PORT}/health`);
+      logger.info(`   API Base: http://localhost:${PORT}/api`);
+      logger.info(`   Database: ${config.MONGODB_URI.split("@")[1]}`);
+      logger.info(
+        `   Email Service: ${config.SMTP_HOST ? "Enabled" : "Disabled"}`
+      );
     });
-
-    logger.info("📊 Available endpoints:");
-    logger.info(`   Health check: http://localhost:${PORT}/health`);
-    logger.info(`   API Base: http://localhost:${PORT}/api`);
-    logger.info(`   Database: ${config.MONGODB_URI.split("@")[1]}`);
-    logger.info(
-      `   Email Service: ${config.SMTP_HOST ? "Enabled" : "Disabled"}`
-    );
   } catch (error) {
     logger.error("Failed to start server:", error);
     process.exit(1);
   }
-});
+})();
