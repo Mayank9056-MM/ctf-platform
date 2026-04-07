@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useAnnouncementStore } from "../store/annoucement.store";
+import { useAnnouncementStore } from "../store/announcement";
 import { dismissAnnouncementApi } from "../api/announcement.api";
 import { announcementKeys } from "../queries/announcement.keys";
 import { ApiError } from "next/dist/server/api-utils";
