@@ -36,7 +36,7 @@ export async function submitFlagApi(
   flag: string,
 ): Promise<SubmitFlagResult> {
   const res = await api.post<ApiResponse<SubmitFlagResult>>(
-    `/challenges/${challengeId}/submit`,
+    `/api/v1/submission/challenges/${challengeId}/submit`,
     { flag },
   );
   return res.data.data;
@@ -52,7 +52,7 @@ export async function getMySubmissionsApi(
   filters: MySubmissionsFilters = {},
 ): Promise<{ submissions: MySubmission[]; meta: PaginationMeta }> {
   const params = buildParams(filters as Record<string, unknown>);
-  const res = await api.get(`/submissions/me?${params}`);
+  const res = await api.get(`/api/v1/submission/submissions/me?${params}`);
   return {
     submissions: res.data.data.submissions,
     meta: res.data.data.meta,
@@ -66,7 +66,7 @@ export async function getMySubmissionsApi(
  */
 export async function getMyStatsApi(): Promise<UserSubmissionStats> {
   const res = await api.get<ApiResponse<UserSubmissionStats>>(
-    "/submissions/me/stats",
+    "/api/v1/submission/submissions/me/stats",
   );
   return res.data.data;
 }
@@ -83,7 +83,7 @@ export async function getChallengeHistoryApi(
   limit = 20,
 ): Promise<{ submissions: ChallengeHistoryEntry[]; meta: PaginationMeta }> {
   const res = await api.get(
-    `/challenges/${challengeId}/history?page=${page}&limit=${limit}`,
+    `/api/v1/submission/challenges/${challengeId}/history?page=${page}&limit=${limit}`,
   );
   return {
     submissions: res.data.data.submissions,
@@ -104,7 +104,7 @@ export async function getChallengeSolvesApi(
   limit = 20,
 ): Promise<{ solves: ChallengeSolveEntry[]; meta: PaginationMeta }> {
   const res = await api.get(
-    `/challenges/${challengeId}/solves?page=${page}&limit=${limit}`,
+    `/api/v1/submission/challenges/${challengeId}/solves?page=${page}&limit=${limit}`,
   );
   return {
     solves: res.data.data.solves,
@@ -125,7 +125,7 @@ export async function adminGetSubmissionsApi(
   filters: AdminSubmissionsFilters = {},
 ): Promise<{ submissions: Submission[]; meta: PaginationMeta }> {
   const params = buildParams(filters as Record<string, unknown>);
-  const res = await api.get(`/admin/submissions?${params}`);
+  const res = await api.get(`/api/v1/submission/admin/submissions?${params}`);
   return {
     submissions: res.data.data.submissions,
     meta: res.data.data.meta,
@@ -143,7 +143,7 @@ export async function adminGetSubmissionStatsApi(
 ): Promise<AdminSubmissionStats> {
   const params = buildParams(filters as Record<string, unknown>);
   const res = await api.get<ApiResponse<AdminSubmissionStats>>(
-    `/admin/submissions/stats?${params}`,
+    `/api/v1/submission/admin/submissions/stats?${params}`,
   );
   return res.data.data;
 }
@@ -158,7 +158,7 @@ export async function adminGetSubmissionByIdApi(
   submissionId: string,
 ): Promise<Submission> {
   const res = await api.get<ApiResponse<Submission>>(
-    `/admin/submissions/${submissionId}`,
+    `/api/v1/submission/admin/submissions/${submissionId}`,
   );
   return res.data.data;
 }
@@ -173,7 +173,7 @@ export async function adminGetSubmissionByIdApi(
 export async function adminDeleteSubmissionApi(
   submissionId: string,
 ): Promise<void> {
-  await api.delete(`/admin/submissions/${submissionId}`);
+  await api.delete(`/api/v1/submission/admin/submissions/${submissionId}`);
 }
 
 // GET /admin/users/:userId/submissions
@@ -193,7 +193,7 @@ export async function adminGetUserSubmissionsApi(
     limit,
     ...(isCorrect !== undefined && { isCorrect }),
   });
-  const res = await api.get(`/admin/users/${userId}/submissions?${params}`);
+  const res = await api.get(`/api/v1/submission/admin/users/${userId}/submissions?${params}`);
   return {
     submissions: res.data.data.submissions,
     meta: res.data.data.meta,
