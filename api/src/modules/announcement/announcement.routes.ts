@@ -65,7 +65,7 @@ announcementRouter.delete("/admin/:id", superAdminGuard, adminDelete);
  * POST /announcements/:id/dismiss
  *   → Dismiss an announcement from the feed. Auth required.
  */
-announcementRouter.get("/", optionalAuth, getFeed);
+announcementRouter.get("/announcements", optionalAuth, getFeed);
 announcementRouter.get("/challenge/:challengeId", getChallengeAnnouncements);
 announcementRouter.post("/:id/dismiss", verifyAuth, dismissAnnouncement);
 
