@@ -21,7 +21,7 @@ export async function getAnnouncementFeedApi(
 ): Promise<AnnouncementFeed> {
   const params = buildParams(filters as Record<string, unknown>);
   const res = await api.get<ApiResponse<AnnouncementFeed>>(
-    `/announcements?${params}`,
+    `/api/v1/announcement/announcements?${params}`,
   );
   return res.data.data;
 }
@@ -32,7 +32,7 @@ export async function getChallengeAnnouncementsApi(
   challengeId: string,
 ): Promise<AnnouncementFeed> {
   const res = await api.get<ApiResponse<AnnouncementFeed>>(
-    `/announcements/challenge/${challengeId}`,
+    `/api/v1/announcement/announcements/challenge/${challengeId}`,
   );
   return res.data.data;
 }
@@ -40,7 +40,7 @@ export async function getChallengeAnnouncementsApi(
 // POST /announcements/:id/dismiss
 
 export async function dismissAnnouncementApi(id: string): Promise<void> {
-  await api.post(`/announcements/${id}/dismiss`);
+  await api.post(`/api/v1/announcement/announcements/${id}/dismiss`);
 }
 
 // ADMIN ROUTES
@@ -52,7 +52,7 @@ export async function adminGetAnnouncementsApi(
 ): Promise<AdminAnnouncementList> {
   const params = buildParams(filters as Record<string, unknown>);
   const res = await api.get<ApiResponse<AdminAnnouncementList>>(
-    `/announcements/admin?${params}`,
+    `/api/v1/announcement/announcements/admin?${params}`,
   );
   return res.data.data;
 }
@@ -61,7 +61,7 @@ export async function adminGetAnnouncementsApi(
 
 export async function adminGetAnnouncementStatsApi(): Promise<AnnouncementStats> {
   const res = await api.get<ApiResponse<AnnouncementStats>>(
-    "/announcements/admin/stats",
+    "/api/v1/announcement/announcements/admin/stats",
   );
   return res.data.data;
 }
@@ -72,7 +72,7 @@ export async function adminCreateAnnouncementApi(
   payload: CreateAnnouncementPayload,
 ): Promise<Announcement> {
   const res = await api.post<ApiResponse<Announcement>>(
-    "/announcements/admin",
+    "/api/v1/announcement/announcements/admin",
     payload,
   );
   return res.data.data;
@@ -84,7 +84,7 @@ export async function adminGetAnnouncementByIdApi(
   id: string,
 ): Promise<Announcement> {
   const res = await api.get<ApiResponse<Announcement>>(
-    `/announcements/admin/${id}`,
+    `/api/v1/announcement/announcements/admin/${id}`,
   );
   return res.data.data;
 }
@@ -96,7 +96,7 @@ export async function adminUpdateAnnouncementApi(
   payload: UpdateAnnouncementPayload,
 ): Promise<Announcement> {
   const res = await api.patch<ApiResponse<Announcement>>(
-    `/announcements/admin/${id}`,
+    `/api/v1/announcement/announcements/admin/${id}`,
     payload,
   );
   return res.data.data;
@@ -108,7 +108,7 @@ export async function adminPublishAnnouncementApi(
   id: string,
 ): Promise<Announcement> {
   const res = await api.post<ApiResponse<Announcement>>(
-    `/announcements/admin/${id}/publish`,
+    `/api/v1/announcement/announcements/admin/${id}/publish`,
   );
   return res.data.data;
 }
@@ -120,7 +120,7 @@ export async function adminRetractAnnouncementApi(
   payload: RetractAnnouncementPayload = {},
 ): Promise<Announcement> {
   const res = await api.post<ApiResponse<Announcement>>(
-    `/announcements/admin/${id}/retract`,
+    `/api/v1/announcement/announcements/admin/${id}/retract`,
     payload,
   );
   return res.data.data;
@@ -129,7 +129,7 @@ export async function adminRetractAnnouncementApi(
 // DELETE /announcements/admin/:id
 
 export async function adminDeleteAnnouncementApi(id: string): Promise<void> {
-  await api.delete(`/announcements/admin/${id}`);
+  await api.delete(`/api/v1/announcement/announcements/admin/${id}`);
 }
 
 // POST /announcements/admin/dispatch-queue
@@ -139,7 +139,7 @@ export async function adminRunDispatchQueueApi(): Promise<{
   failed: number;
 }> {
   const res = await api.post<ApiResponse<{ processed: number; failed: number }>>(
-    "/announcements/admin/dispatch-queue",
+    "/api/v1/announcement/announcements/admin/dispatch-queue",
   );
   return res.data.data;
 }
