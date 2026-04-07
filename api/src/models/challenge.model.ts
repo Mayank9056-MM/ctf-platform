@@ -1,4 +1,4 @@
-import mongoose, { Types, Document } from "mongoose";
+import mongoose, { Types, Document, ClientSession } from "mongoose";
 import crypto from "crypto";
 
 // sub-documents interface
@@ -96,7 +96,8 @@ export interface IChallenge extends Document {
   verifyFlag(submittedFlag: string): boolean;
   recordSolve(
     userId: Types.ObjectId,
-    teamId?: Types.ObjectId
+    teamId?: Types.ObjectId,
+    session?: ClientSession
   ): Promise<IChallenge>;
 }
 
@@ -557,7 +558,8 @@ challengeSchema.methods.verifyFlag = function (
 challengeSchema.methods.recordSolve = async function (
   this: IChallenge,
   userId: Types.ObjectId,
-  teamId?: Types.ObjectId
+  teamId?: Types.ObjectId,
+  session?: ClientSession
 ): Promise<IChallenge> {
   const pointsAwarded = this.getCurrentPoints();
 
@@ -587,7 +589,7 @@ challengeSchema.methods.recordSolve = async function (
   this.solveCount += 1;
   this.totalAttempts += 1;
 
-  return this.save({ validateBeforeSave: false });
+  return this.save({ validateBeforeSave: false, session });
 };
 
 const Challenge = mongoose.model<IChallenge>("Challenge", challengeSchema);
