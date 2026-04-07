@@ -1,4 +1,8 @@
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   useNotificationStore,
   useOptimisticSets,
@@ -9,14 +13,23 @@ import {
 } from "../types/notification.types";
 import { notificationKeys } from "../queries/notification.keys";
 import { getNotificationsApi } from "../api/notification.api";
+import { useEffect, useMemo } from "react";
+import { getSocket } from "@/shared/lib/socket";
 
 /**
- * Full inbox list. Merges server data with optimistic dismiss/delete sets
- * so the UI never flickers when an action is in-flight.
+ * React Query hook for fetching the user's notification inbox.
+ * Merges the server response with the optimistic dismissed/deleted
+ * sets from the Zustand store, so the UI never flickers.
+ * If the user has dismissed/soft-deleted a notification this session,
+ * it will be filtered out of the response.
  *
- * Reads filters from the Zustand store so filter controls stay in sync.
+ * @param {GetNotificationsFilters} [overrideFilters] - Optional filters to
+ * override the default filters.
+ * @returns {{ data: { notifications: Notification[], meta: NotificationListMeta }, ...useQuery }}
  */
 export function useNotifications(overrideFilters?: GetNotificationsFilters) {
+  const queryClient = useQueryClient();
+
   const storeState = useNotificationStore((s) => ({
     page: s.inboxPage,
     filter: s.inboxFilter,
@@ -25,22 +38,47 @@ export function useNotifications(overrideFilters?: GetNotificationsFilters) {
 
   const { dismissedIds, deletedIds } = useOptimisticSets();
 
-  const filters: GetNotificationsFilters = overrideFilters ?? {
-    page: storeState.page,
-    limit: 20,
-    ...(storeState.filter === "unread" && { isRead: false }),
-    ...(storeState.typeFilter !== "all" && {
-      type: storeState.typeFilter as NotificationTypeValue,
-    }),
-    includeBroadcasts: true,
-  };
+  const filters: GetNotificationsFilters = useMemo(() => {
+    return (
+      overrideFilters ?? {
+        page: storeState.page,
+        limit: 20,
+        ...(storeState.filter === "unread" && { isRead: false }),
+        ...(storeState.typeFilter !== "all" && {
+          type: storeState.typeFilter as NotificationTypeValue,
+        }),
+        includeBroadcasts: true,
+      }
+    );
+  }, [
+    overrideFilters,
+    storeState.page,
+    storeState.filter,
+    storeState.typeFilter,
+  ]);
 
   const query = useQuery({
     queryKey: notificationKeys.list(filters),
     queryFn: () => getNotificationsApi(filters),
-    staleTime: 1000 * 15,
+    staleTime: Infinity,
     placeholderData: keepPreviousData,
   });
+
+  useEffect(() => {
+    const socket = getSocket();
+
+    function handleNewNotification() {
+      queryClient.invalidateQueries({
+        queryKey: notificationKeys.list(filters),
+      });
+    }
+
+    socket.on("notification:new", handleNewNotification);
+
+    return () => {
+      socket.off("notification:new", handleNewNotification);
+    };
+  }, [queryClient, filters]);
 
   // Merge: filter out items dismissed/deleted this session (optimistic)
   const notifications = (query.data?.notifications ?? []).filter(
