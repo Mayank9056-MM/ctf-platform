@@ -5,8 +5,13 @@ import connectDB, { getDBStatus } from "./db/index";
 import { connectRedis } from "./config/redis";
 import logger from "./utils/logger";
 import { EmailService } from "./services/emailService";
+import { initSocket } from "./socket/socket.gateway";
+import { getRedis } from "./lib/redis";
+import http from "http";
 
 const PORT = config.PORT;
+
+const httpServer = http.createServer(app);
 
 // Graceful shutdown handler
 const gracefulShutdown = async (signal: string) => {
@@ -35,7 +40,11 @@ process.on("uncaughtException", (error) => {
 const server = app.listen(PORT, async () => {
   try {
     await connectDB();
-    // await connectRedis();
+    await connectRedis();
+
+    await getRedis();
+
+    await initSocket(httpServer);
 
     // Initialize email service
     EmailService.initialize();
