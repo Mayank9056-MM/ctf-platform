@@ -1,40 +1,70 @@
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { getEventsApi } from "../api/events.api";
 import { useEventListState } from "../store/event.store";
 import { EventListFilters } from "../types/event.type";
 import { eventKeys } from "../queries/event.queries";
-import {
-  EVENT_REFETCH_INTERVALS,
-  EVENT_STALE,
-} from "../constants/event.constants";
+// import {
+//   EVENT_REFETCH_INTERVALS,
+//   EVENT_STALE,
+// } from "../constants/event.constants";
+import { useEffect, useMemo } from "react";
+import { getSocket } from "@/shared/lib/socket";
 
 /**
- * Public paginated event list. Reads all filters from Zustand store.
- *
- * - refetchInterval: 2 min — events can auto-transition (draft→scheduled→active)
- *   so the list needs periodic refresh to pick up status changes without reload.
- * - keepPreviousData: prevents layout shift when changing filters.
+ * Hook to fetch the event list. Merges filters from the store with the override parameter.
+ * Listens to the "event:status_changed" socket event to invalidate the query when an event status changes.
+ * @param override EventListFilters - overrides the filters from the store
+ * @returns The result of the query
  */
 export function useEvents(override?: EventListFilters) {
   const { page, statusFilter, formatFilter, search, sortBy, sortOrder } =
     useEventListState();
 
-  const filters: EventListFilters = override ?? {
-    page,
-    limit: 12,
-    ...(statusFilter !== "all" && { status: statusFilter }),
-    ...(formatFilter !== "all" && { format: formatFilter }),
-    ...(search.trim() && { search: search.trim() }),
-    sortBy,
-    sortOrder,
-  };
+  const queryClient = useQueryClient();
+
+  const filters: EventListFilters = useMemo(() => {
+    return (
+      override ?? {
+        page,
+        limit: 12,
+        ...(statusFilter !== "all" && { status: statusFilter }),
+        ...(formatFilter !== "all" && { format: formatFilter }),
+        ...(search.trim() && { search: search.trim() }),
+        sortBy,
+        sortOrder,
+      }
+    );
+  }, [override, page, statusFilter, formatFilter, search, sortBy, sortOrder]);
+
+  useEffect(() => {
+    const socket = getSocket();
+
+    if (!socket) return;
+
+    const handler = () => {
+      queryClient.invalidateQueries({
+        queryKey: eventKeys.list(filters),
+      });
+    };
+
+    socket.on("event:status_changed", handler);
+
+    return () => {
+      socket.off("event:status_changed", handler);
+    };
+  }, [queryClient, filters]);
 
   return useQuery({
     queryKey: eventKeys.list(filters),
     queryFn: () => getEventsApi(filters),
-    staleTime: EVENT_STALE.LIST,
+    // staleTime: EVENT_STALE.LIST,
+    staleTime: Infinity,
     placeholderData: keepPreviousData,
-    refetchInterval: EVENT_REFETCH_INTERVALS.LIVE_LIST,
+    // refetchInterval: EVENT_REFETCH_INTERVALS.LIVE_LIST,
     refetchIntervalInBackground: false,
   });
 }
