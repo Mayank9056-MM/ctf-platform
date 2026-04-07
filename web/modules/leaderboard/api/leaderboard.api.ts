@@ -26,7 +26,7 @@ export async function getLeaderboardApi(
 ): Promise<LeaderboardResponse> {
   const params = buildParams(filters as Record<string, unknown>);
   const res = await api.get<ApiResponse<LeaderboardResponse>>(
-    `/leaderboard?${params}`,
+    `/api/v1/leaderboard/leaderboard?${params}`,
   );
   return res.data.data;
 }
@@ -39,7 +39,7 @@ export async function getLeaderboardApi(
 export async function getMyRankApi(): Promise<MyRankResponse | null> {
   const res =
     await api.get<ApiResponse<MyRankResponse | { rank: null }>>(
-      "/leaderboard/me",
+      "/api/v1/leaderboard/leaderboard/me",
     );
   const data = res.data.data;
   return "rank" in data && data.rank === null ? null : (data as MyRankResponse);
@@ -59,7 +59,7 @@ export async function adminRecomputeApi(params: {
 }): Promise<AdminRecomputeResponse> {
   const qs = buildParams(params as Record<string, unknown>);
   const res = await api.post<ApiResponse<AdminRecomputeResponse>>(
-    `/admin/leaderboard/recompute?${qs}`,
+    `/api/v1/leaderboard/admin/leaderboard/recompute?${qs}`,
   );
   return res.data.data;
 }
