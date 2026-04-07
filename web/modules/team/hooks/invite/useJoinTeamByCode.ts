@@ -4,7 +4,6 @@ import { teamKeys } from "../../queries/team.queries";
 import { joinTeamByCodeApi } from "../../api/team.api";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTeamStore } from "../../store/team.store";
-
 const USER_CURRENT_KEY = ["user", "current"];
 const NOTIFICATION_SUMMARY_KEY = ["notifications", "summary"];
 
@@ -14,10 +13,7 @@ const NOTIFICATION_SUMMARY_KEY = ["notifications", "summary"];
  */
 export function useJoinTeamByCode() {
   const qc = useQueryClient();
-  const { setJoinCodeInput } = useTeamStore((s) => ({
-    setJoinCodeInput: s.setJoinCodeInput,
-  }));
-
+  const setJoinCodeInput = useTeamStore((s) => s.setJoinCodeInput);
   return useMutation({
     mutationFn: (code: string) => joinTeamByCodeApi(code),
 

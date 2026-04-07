@@ -3,7 +3,8 @@ import { searchTeamsApi } from "../api/team.api";
 import { TEAM_STALE } from "../constants/team.constants";
 import { teamKeys } from "../queries/team.queries";
 import { SearchTeamParams } from "../types/team.types";
-import { useTeamSearchState } from "../store/team.store";
+import { useTeamStore } from "../store/team.store";
+import { useMemo } from "react";
 
 /**
  * Search public teams. Reads params from Zustand store.
@@ -11,16 +12,24 @@ import { useTeamSearchState } from "../store/team.store";
  * keepPreviousData prevents layout shift when changing page.
  */
 export function useTeamSearch(override?: SearchTeamParams) {
-  const { query, page, country, sortBy, sortOrder } = useTeamSearchState();
+  const query = useTeamStore((s) => s.searchQuery);
+  const page = useTeamStore((s) => s.searchPage);
+  const country = useTeamStore((s) => s.searchCountry);
+  const sortBy = useTeamStore((s) => s.searchSortBy);
+  const sortOrder = useTeamStore((s) => s.searchSortOrder);
 
-  const params: SearchTeamParams = override ?? {
-    q: query.trim().length >= 2 ? query.trim() : undefined,
-    page,
-    limit: 12,
-    ...(country && { country }),
-    sortBy,
-    sortOrder,
-  };
+  const params = useMemo(() => {
+    if (override) return override;
+
+    return {
+      q: query.trim().length >= 2 ? query.trim() : undefined,
+      page,
+      limit: 12,
+      ...(country && { country }),
+      sortBy,
+      sortOrder,
+    };
+  }, [override, query, page, country, sortBy, sortOrder]);
 
   const isEnabled =
     (params.q !== undefined && params.q.length >= 2) ||

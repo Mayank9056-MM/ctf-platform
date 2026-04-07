@@ -1,5 +1,8 @@
 import { useUser } from "@/modules/auth/store/auth.store";
-import { useLeaderboardFilters } from "../store/leaderboard.store";
+import {
+  useLeaderboardFilters,
+  useLeaderboardStore,
+} from "../store/leaderboard.store";
 import { LeaderboardQueryFilters } from "../types/leaderboard.types";
 import { REFETCH_INTERVALS, STALE } from "../constants/leaderboard.constants";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
@@ -9,13 +12,13 @@ import { ApiError } from "next/dist/server/api-utils";
 
 /**
  * Retrieves a leaderboard with pagination.
- * 
+ *
  * The first request or no snapshot — compute now (cold start).
  * Subsequent requests will return the cached snapshot.
- * 
+ *
  * If the requesting user's ID is provided, the service will find their entry
  * (even outside top-N) and include it in the response.
- * 
+ *
  * @param {Partial<LeaderboardQueryFilters>} override - Optional filters to override the store filters.
  * @returns An object containing the following properties:
  *   - entries: Annotated array of leaderboard entries, where each entry contains the user's data and a flag indicating whether the entry belongs to the current user.
@@ -28,19 +31,25 @@ import { ApiError } from "next/dist/server/api-utils";
  *   - ageSeconds: The age of the leaderboard in seconds.
  */
 export function useLeaderboard(override?: Partial<LeaderboardQueryFilters>) {
-  const storeFilters = useLeaderboardFilters();
+  const scope = useLeaderboardStore((s) => s.scope);
+  const eventId = useLeaderboardStore((s) => s.eventId);
+  const page = useLeaderboardStore((s) => s.page);
+  const limit = useLeaderboardStore((s) => s.limit);
   const currentUser = useUser();
- 
+
   const filters: LeaderboardQueryFilters = {
-    ...storeFilters,
+    scope,
+    eventId: eventId ?? undefined,
+    page,
+    limit,
     ...override,
   };
- 
+
   const isEventScope = filters.scope.startsWith("event_");
   const refetchInterval = isEventScope
     ? REFETCH_INTERVALS.ACTIVE_EVENT
     : REFETCH_INTERVALS.GLOBAL;
- 
+
   const query = useQuery({
     queryKey: leaderboardKeys.board(filters),
     queryFn: () => getLeaderboardApi(filters),
@@ -55,9 +64,9 @@ export function useLeaderboard(override?: Partial<LeaderboardQueryFilters>) {
       return failureCount < 2;
     },
   });
- 
+
   const data = query.data;
- 
+
   // Annotate entries: highlight the current user's row
   const annotatedEntries = (data?.entries ?? []).map((e) => ({
     ...e,
@@ -66,7 +75,7 @@ export function useLeaderboard(override?: Partial<LeaderboardQueryFilters>) {
       e.entityType === "user" &&
       e.entityId === currentUser._id,
   }));
- 
+
   return {
     ...query,
     entries: annotatedEntries,
