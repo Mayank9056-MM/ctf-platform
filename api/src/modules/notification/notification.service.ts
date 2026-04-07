@@ -17,6 +17,7 @@ import Notification, {
 import { buildMeta } from "../../utils/helpers";
 import { ApiError } from "../../utils/ApiError";
 import User from "../../models/user.model";
+import { socketEmit } from "../../socket/socket.emitters";
 
 const audit = async (
   entry: Parameters<IAuditLogModel["record"]>[0]
@@ -121,6 +122,15 @@ class NotificationService {
               extra: ref.extra,
             }
           : undefined,
+      });
+
+      socketEmit.newNotification(recipientId?.toString() ?? null, {
+        _id: notification._id.toString(),
+        type: notification.type,
+        title: notification.title,
+        body: notification.body,
+        actionUrl: notification.actionUrl ?? undefined,
+        createdAt: notification.createdAt.toISOString(),
       });
 
       return notification;
