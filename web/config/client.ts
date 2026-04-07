@@ -6,6 +6,7 @@ const clientSchema = z.object({
   NEXT_PUBLIC_POSTHOG_HOST: z.url(),
   NEXT_PUBLIC_GITHUB_CLIENT_ID: z.string().min(1),
   NEXT_PUBLIC_GOOGLE_CLIENT_ID: z.string().min(1),
+  NEXT_PUBLIC_SOCKET_URL: z.url(),
 });
 
 export const clientConfig = clientSchema.parse({
@@ -15,4 +16,5 @@ export const clientConfig = clientSchema.parse({
   NEXT_PUBLIC_POSTHOG_HOST: process.env.NEXT_PUBLIC_POSTHOG_HOST,
   NEXT_PUBLIC_GITHUB_CLIENT_ID: process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID,
   NEXT_PUBLIC_GOOGLE_CLIENT_ID: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
+  NEXT_PUBLIC_SOCKET_URL: process.env.NEXT_PUBLIC_SOCKET_URL,
 });
