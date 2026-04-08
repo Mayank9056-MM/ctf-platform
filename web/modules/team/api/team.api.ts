@@ -4,6 +4,7 @@ import {
   PaginationMeta,
   SearchTeamParams,
   Team,
+  TeamSearchResponse,
   TeamSearchResult,
   UpdateTeamPayload,
 } from "../types/team.types";
@@ -56,7 +57,10 @@ export async function searchTeamsApi(
   params: SearchTeamParams = {},
 ): Promise<{ teams: TeamSearchResult[]; meta: PaginationMeta }> {
   const qs = buildParams(params as Record<string, unknown>);
-  const res = await api.get(`/api/v1/team/search?${qs}`);
+  const res = await api.get<ApiResponse<TeamSearchResponse>>(
+    `/api/v1/team/search?${qs}`,
+  );
+
   return {
     teams: res.data.data.teams,
     meta: res.data.data.meta,
