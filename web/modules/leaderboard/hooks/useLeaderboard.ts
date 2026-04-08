@@ -9,6 +9,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { leaderboardKeys } from "../queries/leaderboard.queries";
 import { getLeaderboardApi } from "../api/leaderboard.api";
 import { ApiError } from "next/dist/server/api-utils";
+import { useMemo } from "react";
 
 /**
  * Retrieves a leaderboard with pagination.
@@ -37,13 +38,15 @@ export function useLeaderboard(override?: Partial<LeaderboardQueryFilters>) {
   const limit = useLeaderboardStore((s) => s.limit);
   const currentUser = useUser();
 
-  const filters: LeaderboardQueryFilters = {
-    scope,
-    eventId: eventId ?? undefined,
-    page,
-    limit,
-    ...override,
-  };
+  const filters = useMemo<LeaderboardQueryFilters>(() => {
+    return {
+      scope,
+      eventId: eventId ?? undefined,
+      page,
+      limit,
+      ...override,
+    };
+  }, [scope, eventId, page, limit, override]);
 
   const isEventScope = filters.scope.startsWith("event_");
   const refetchInterval = isEventScope
