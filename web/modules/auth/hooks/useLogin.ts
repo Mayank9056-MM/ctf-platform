@@ -1,4 +1,4 @@
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useAuthStore } from "../store/auth.store";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { LoginFormData } from "../validation/auth.validator";
@@ -6,19 +6,22 @@ import { loginApi, resendVerificationApi } from "../api/auth.api";
 import { ApiError } from "next/dist/server/api-utils";
 import { toast } from "sonner";
 
+type LoginVariables = LoginFormData & {
+  from?: string | null;
+};
+
 export const useLogin = () => {
   const router = useRouter();
   const setUser = useAuthStore((s) => s.setUser);
-  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: LoginFormData) => loginApi(data),
-    onSuccess: (res) => {
+    mutationFn: (data: LoginVariables) => loginApi(data),
+    onSuccess: (res, variables) => {
       setUser(res.data);
       queryClient.setQueryData(["auth", "me"], res.data);
       toast.success(`Welcome back, ${res.data.username}! 🎯`);
-      const from = searchParams.get("from");
+      const from = variables.from;
       const dest =
         from && from.startsWith("/") && from !== "/login" ? from : "/dashboard";
       router.push(dest);
