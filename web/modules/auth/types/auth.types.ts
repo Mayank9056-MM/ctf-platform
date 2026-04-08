@@ -40,18 +40,39 @@ export type AuthUser = {
   username: string;
   email: string;
   fullName?: string;
+  mobileNumber?: string;
+  providers: [
+    {
+      provider: string;
+      providerId: string;
+    },
+  ];
   avatar?: {
     url: string;
     publicId: string;
   };
-  role: "user" | "admin" | "superadmin";
-  isVerified: boolean;
-  isBanned: boolean;
-  score: number;
-  country?: string;
+  bio?: string;
   teamId?: string;
-  providers: { provider: string; providerId: string }[];
+  solvedChallenges: string[];
+  resetPasswordToken?: string;
+  resetPasswordExpire?: Date;
+  score: number;
+  isVerified: boolean;
+  password?: string;
+  role: "user" | "admin" | "superadmin";
+  lastActive: Date;
+  isBanned: boolean;
+  emailVerificationToken?: string;
+  emailVerificationExpire?: Date;
+  hintsPurchased?: {
+    challengeId: string;
+    hintIndex: number;
+    purchasedAt: Date;
+  }[];
+  country?: string;
+  isDeleted: boolean;
   createdAt: string;
+  updatedAt: string;
 };
 
 export type AuthTokens = {
@@ -71,7 +92,6 @@ export type RegisterResponse = {
   data: AuthUser;
   message: string;
 };
-
 
 // Zustand Store Types
 
