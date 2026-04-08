@@ -16,14 +16,26 @@ export interface UserProfile {
   };
   bio?: string;
   teamId?: string;
+  solvedChallenges: string[];
+  resetPasswordToken?: string;
+  resetPasswordExpire?: Date;
   score: number;
   isVerified: boolean;
   password?: string;
   role: "user" | "admin" | "superadmin";
-  lastActive: string;
+  lastActive: Date;
   isBanned: boolean;
+  emailVerificationToken?: string;
+  emailVerificationExpire?: Date;
+  hintsPurchased?: {
+    challengeId: string;
+    hintIndex: number;
+    purchasedAt: Date;
+  }[];
   country?: string;
-  createdAt: string;
+  isDeleted: boolean;
+    createdAt: string;
+    updatedAt: string;
 }
 
 export interface UpdateProfilePayload {
