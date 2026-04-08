@@ -215,12 +215,14 @@ function UserDropdown({
 }: {
   user: NonNullable<ReturnType<typeof useNavbar>["user"]>;
   isOpen: boolean;
-  menuRef: React.RefObject<HTMLDivElement>;
+  menuRef: React.RefObject<HTMLDivElement | null>;
   onClose: () => void;
   onLogout: () => void;
   isLoggingOut: boolean;
 }) {
   if (!isOpen) return null;
+
+  console.log(user,"user");
 
   return (
     <div
@@ -331,7 +333,7 @@ function SearchOverlay({
 }: {
   isOpen: boolean;
   onClose: () => void;
-  searchRef: React.RefObject<HTMLInputElement>;
+  searchRef: React.RefObject<HTMLInputElement | null>;
 }) {
   if (!isOpen) return null;
 

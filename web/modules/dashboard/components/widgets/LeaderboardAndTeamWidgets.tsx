@@ -249,7 +249,9 @@ function MemberRow({
             {member.username}
           </Link>
           {isOwner && (
-            <Crown className="h-3 w-3 shrink-0 text-yellow-500" title="Owner" />
+            <span title="Owner">
+              <Crown className="h-3 w-3 shrink-0 text-yellow-500" />
+            </span>
           )}
         </div>
         <p className="font-mono text-[10px] text-slate-700">
@@ -310,8 +312,7 @@ function MyTeamView({
   const [showInvite, setShowInvite] = useState(false);
   const [inviteInput, setInviteInput] = useState("");
 
-  const ownerId =
-    typeof team.owner === "string" ? team.owner : (team.owner)._id;
+  const ownerId = typeof team.owner === "string" ? team.owner : team.owner._id;
   const isOwner = currentUser?._id === ownerId;
 
   const copyCode = () => {
@@ -498,7 +499,7 @@ function SearchView() {
           </div>
         ) : !data?.teams.length ? (
           <p className="py-6 text-center text-xs text-slate-700">
-            No teams found for "{query}"
+            No teams found for &quot;{query}&quot;
           </p>
         ) : (
           <div className="space-y-2">
@@ -512,8 +513,8 @@ function SearchView() {
                     {t.name}
                   </p>
                   <p className="font-mono text-[10px] text-slate-600">
-                    {t.memberCount ?? (t.members as any)?.length ?? 0}/
-                    {t.maxMembers} · {t.score.toLocaleString()} pts
+                    {t.memberCount ?? t.members?.length ?? 0}/{t.maxMembers} ·{" "}
+                    {t.score.toLocaleString()} pts
                     {t.country && ` · ${t.country}`}
                   </p>
                 </div>
@@ -608,7 +609,7 @@ export function TeamWidget() {
         ) : tab === "join" ? (
           <JoinView />
         ) : team ? (
-          <MyTeamView team={team as any} />
+          <MyTeamView team={team} />
         ) : (
           <EmptyState
             icon={<Shield className="h-10 w-10" />}

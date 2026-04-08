@@ -45,7 +45,6 @@ function EventCard({
   event: EventSummary;
   isLive: boolean;
 }) {
-  console.log(event, "event from eventCard");
 
   const { mutate: register, isPending } = useRegisterForEvent();
   const accent = event?.branding?.accentColor ?? "#10b981";

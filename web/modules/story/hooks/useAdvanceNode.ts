@@ -17,7 +17,7 @@ export function useAdvanceNode(
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: (elapsedSeconds = 0) =>
+    mutationFn: (elapsedSeconds: number = 0) =>
       advanceNodeApi(storyId, chapterId, nodeId, elapsedSeconds),
 
     onSuccess: (result) => {

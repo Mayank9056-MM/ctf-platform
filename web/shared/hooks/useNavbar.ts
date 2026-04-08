@@ -6,6 +6,7 @@ import { useInboxSummary } from "@/modules/notification/hooks/useInboxSummary";
 import { useLiveEvents } from "@/modules/events/hooks/useLiveEvents";
 import { useLogout } from "@/modules/auth/hooks/useLogout";
 import { useAuthStore } from "@/modules/auth/store/auth.store";
+import { startTransition } from "react";
 
 export function useNavbar() {
   const pathname = usePathname();
@@ -23,7 +24,7 @@ export function useNavbar() {
 
   // Live event count — badge on Events nav item
   const { data: liveEventsData } = useLiveEvents();
-  const liveCount = liveEventsData?.data?.events?.length ?? 0;
+  const liveCount = liveEventsData?.events?.length ?? 0;
 
   // Notification unread count — bell badge
   const { data: summary } = useInboxSummary();
@@ -38,9 +39,11 @@ export function useNavbar() {
 
   // Close everything on route change
   useEffect(() => {
-    setMobileOpen(false);
-    setUserMenuOpen(false);
-    setSearchOpen(false);
+    startTransition(() => {
+      setMobileOpen(false);
+      setUserMenuOpen(false);
+      setSearchOpen(false);
+    });
   }, [pathname]);
 
   // Close user menu on outside click

@@ -25,7 +25,7 @@ import { useGoogleAuth } from "../hooks/useGoggleAuth";
 import { LoginFormData, loginSchema } from "../validation/auth.validator";
 import { cn } from "@/lib/utils";
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// Helpers
 
 function FieldError({ message }: { message?: string }) {
   return (
@@ -86,7 +86,11 @@ export default function LoginForm() {
     return () => clearInterval(t);
   }, []);
 
-  const onSubmit = (data: LoginFormData) => login(data);
+  const onSubmit = (data: LoginFormData) =>
+    login({
+      ...data,
+      from: searchParams.get("from"),
+    });
 
   const handleGoogleSuccess = (cred: CredentialResponse) => {
     if (cred.credential) googleAuth(cred.credential);
@@ -125,7 +129,7 @@ export default function LoginForm() {
         <div className="relative z-10 space-y-10">
           <div className="space-y-4">
             <span className="font-mono text-xs tracking-[0.3em] text-emerald-400/80 uppercase">
-              // Welcome back
+              {"// Welcome back"}
             </span>
             <h1 className="text-4xl xl:text-5xl font-bold tracking-tight text-white leading-[1.1]">
               Ready to

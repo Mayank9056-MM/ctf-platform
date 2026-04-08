@@ -68,10 +68,9 @@ export async function registerForEventApi(
   eventId: string,
   inviteCode?: string,
 ): Promise<void> {
-  const res = await api.post(`/api/v1/event/events/${eventId}/register`, {
+  await api.post(`/api/v1/event/events/${eventId}/register`, {
     inviteCode,
   });
-  console.log(res, "res from register fro event api");
 }
 
 // GET /events/:id/leaderboard
