@@ -33,12 +33,22 @@ import { useUpcomingEvents } from "@/modules/events/hooks/useUpcomingEvents";
 import { useLiveEvents } from "@/modules/events/hooks/useLiveEvents";
 import { useDismissAnnouncement } from "@/modules/announcement/hooks/useDismissAnnouncement";
 import { useAnnouncementFeed } from "@/modules/announcement/hooks/useAnnoucementFeed";
+import { EventSummary } from "@/modules/events/types/event.type";
+import { AnnouncementFeedItem } from "@/modules/announcement/types/announcement.types";
 
 // EventsWidget
 
-function EventCard({ event, isLive }: { event: Event; isLive: boolean }) {
+function EventCard({
+  event,
+  isLive,
+}: {
+  event: EventSummary;
+  isLive: boolean;
+}) {
+  console.log(event, "event from eventCard");
+
   const { mutate: register, isPending } = useRegisterForEvent();
-  const accent = event.branding?.accentColor ?? "#10b981";
+  const accent = event?.branding?.accentColor ?? "#10b981";
 
   return (
     <div
@@ -133,21 +143,20 @@ function EventCard({ event, isLive }: { event: Event; isLive: boolean }) {
 
 export function EventsWidget() {
   const {
-    data: liveEvents = [],
+    data: liveEvents,
     isLoading: loadingLive,
     refetch: refetchLive,
   } = useLiveEvents();
-  const { data: upcoming = [], isLoading: loadingUpcoming } =
-    useUpcomingEvents();
+  const { data: upcoming, isLoading: loadingUpcoming } = useUpcomingEvents();
 
   const isLoading = loadingLive || loadingUpcoming;
   const hasAny =
-    (liveEvents.data?.events?.length ?? 0) > 0 ||
-    (upcoming.data?.events?.length ?? 0) > 0;
+    (liveEvents?.events?.length ?? 0) > 0 ||
+    (upcoming?.events?.length ?? 0) > 0;
 
   // Normalise — both hooks return { data: { events } }
-  const live = liveEvents.data?.events ?? [];
-  const soon = upcoming.data?.events ?? [];
+  const live = liveEvents?.events ?? [];
+  const soon = upcoming?.events ?? [];
   const showAny = live.length > 0 || soon.length > 0;
 
   return (
@@ -225,7 +234,7 @@ const SEV_CFG = {
   },
 } as const;
 
-function AnnouncementCard({ item }: { item: any }) {
+function AnnouncementCard({ item }: { item: AnnouncementFeedItem }) {
   const { mutate: dismiss, isPending } = useDismissAnnouncement();
   const cfg = SEV_CFG[item.severity as keyof typeof SEV_CFG] ?? SEV_CFG.info;
   const Icon = cfg.icon;
@@ -282,9 +291,11 @@ function AnnouncementCard({ item }: { item: any }) {
 
           <div className="mt-2 flex items-center justify-between">
             <span className="font-mono text-[9px] text-slate-700">
-              {formatDistanceToNow(new Date(item.publishedAt), {
-                addSuffix: true,
-              })}
+              {item.publishedAt
+                ? formatDistanceToNow(new Date(item.publishedAt), {
+                    addSuffix: true,
+                  })
+                : "-"}
             </span>
             {item.actionUrl && (
               <a
@@ -333,9 +344,7 @@ export function AnnouncementsWidget() {
               description="Platform updates will appear here"
             />
           ) : (
-            announcements.map((a: any) => (
-              <AnnouncementCard key={a._id} item={a} />
-            ))
+            announcements.map((a) => <AnnouncementCard key={a._id} item={a} />)
           )}
         </div>
       </ScrollArea>

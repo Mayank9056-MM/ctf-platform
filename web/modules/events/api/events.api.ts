@@ -36,7 +36,10 @@ export async function getEventsApi(
   filters: EventListFilters = {},
 ): Promise<{ events: EventSummary[]; meta: PaginationMeta }> {
   const params = buildParams(filters as Record<string, unknown>);
-  const res = await api.get(`/api/v1/event/events?${params}`);
+  const res = await api.get<
+    ApiResponse<{ events: EventSummary[]; meta: PaginationMeta }>
+  >(`/api/v1/event/events?${params}`);
+
   return {
     events: res.data.data.events,
     meta: res.data.data.meta,
@@ -50,7 +53,9 @@ export async function getEventsApi(
  * inviteCode is only returned to organizers/admins.
  */
 export async function getEventDetailApi(idOrSlug: string): Promise<Event> {
-  const res = await api.get<ApiResponse<Event>>(`/api/v1/event/events/${idOrSlug}`);
+  const res = await api.get<ApiResponse<Event>>(
+    `/api/v1/event/events/${idOrSlug}`,
+  );
   return res.data.data;
 }
 
@@ -63,7 +68,10 @@ export async function registerForEventApi(
   eventId: string,
   inviteCode?: string,
 ): Promise<void> {
-  await api.post(`/api/v1/event/events/${eventId}/register`, { inviteCode });
+  const res = await api.post(`/api/v1/event/events/${eventId}/register`, {
+    inviteCode,
+  });
+  console.log(res, "res from register fro event api");
 }
 
 // GET /events/:id/leaderboard
@@ -121,7 +129,10 @@ export async function adminGetEventsApi(
 export async function adminCreateEventApi(
   payload: CreateEventPayload,
 ): Promise<Event> {
-  const res = await api.post<ApiResponse<Event>>("/api/v1/event/events/admin", payload);
+  const res = await api.post<ApiResponse<Event>>(
+    "/api/v1/event/events/admin",
+    payload,
+  );
   return res.data.data;
 }
 
