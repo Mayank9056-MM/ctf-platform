@@ -59,12 +59,23 @@ export type TeamSearchResult = {
   name: string;
   description?: string;
   avatar?: string;
+  owner: TeamOwner;
+  members: TeamMemberUser[];
+  /** Only present on getMyTeam (includeInvites = true) */
+  invites?: TeamInvite[];
   score: number;
-  memberCount: number;
   maxMembers: number;
-  country?: string;
   isPrivate: boolean;
+  isActive: boolean;
+  country?: string;
+  /** Only present for team owner */
+  joinCode?: string;
+  joinCodeExpire?: string;
+  solvedChallenges: string[];
   createdAt: string;
+  updatedAt: string;
+  // Computed by server
+  memberCount?: number;
 };
 
 // Pagination
