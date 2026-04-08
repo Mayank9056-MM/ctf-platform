@@ -25,9 +25,9 @@ import { cn } from "@/lib/utils";
 import { useRegister } from "../hooks/useRegister";
 import { useGoogleAuth } from "../hooks/useGoggleAuth";
 import { useGitHubAuth } from "../hooks/useGithubAuth";
-import { RegisterFormData, registerSchema } from "../validation/auth.validator";
+import { RegisterFormData, registerSchema } from "../schema/auth.schema";
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+// ─── Sub-components 
 
 function PasswordStrengthBar({ password }: { password: string }) {
   const checks = [

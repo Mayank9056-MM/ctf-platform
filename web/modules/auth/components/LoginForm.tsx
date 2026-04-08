@@ -22,7 +22,7 @@ import {
 import { useGitHubAuth } from "../hooks/useGithubAuth";
 import { useLogin } from "../hooks/useLogin";
 import { useGoogleAuth } from "../hooks/useGoggleAuth";
-import { LoginFormData, loginSchema } from "../validation/auth.validator";
+import { LoginFormData, loginSchema } from "../schema/auth.schema";
 import { cn } from "@/lib/utils";
 
 // Helpers

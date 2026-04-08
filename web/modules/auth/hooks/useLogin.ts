@@ -1,7 +1,7 @@
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "../store/auth.store";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { LoginFormData } from "../validation/auth.validator";
+import { LoginFormData } from "../schema/auth.schema";
 import { loginApi, resendVerificationApi } from "../api/auth.api";
 import { ApiError } from "next/dist/server/api-utils";
 import { toast } from "sonner";
