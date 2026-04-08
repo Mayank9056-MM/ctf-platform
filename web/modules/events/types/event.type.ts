@@ -293,3 +293,4 @@ export type EventUIState = {
   setSelectedEvent: (id: string | null) => void;
   setIsManagingChallenges: (v: boolean) => void;
 };
+
