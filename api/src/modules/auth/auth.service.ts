@@ -315,7 +315,7 @@ class AuthService {
     user.password = data.newPassword;
     user.resetPasswordToken = undefined;
     user.resetPasswordExpire = undefined;
-    await user.save({ validateBeforeSave: false });
+    await user.save();
 
     await refreshTokenService.revokeAllForUser(user._id, "password_reset");
 

@@ -23,35 +23,22 @@ export const useLeaderboardStore = create<LeaderboardUIState>()(
       setScope: (scope: LeaderboardScope) =>
         set({ scope, page: 1 }, false, "setScope"),
 
-      setEventId: (id) =>
-        set({ eventId: id, page: 1 }, false, "setEventId"),
+      setEventId: (id) => set({ eventId: id, page: 1 }, false, "setEventId"),
 
-      setPage: (page) =>
-        set({ page }, false, "setPage"),
+      setPage: (page) => set({ page }, false, "setPage"),
 
-      setLimit: (limit) =>
-        set({ limit, page: 1 }, false, "setLimit"),
+      setLimit: (limit) => set({ limit, page: 1 }, false, "setLimit"),
 
       resetFilters: () =>
         set(
-          { scope: "global_user", eventId: null, page: 1, limit: 50 },
+          { scope: "global_user", eventId: undefined, page: 1, limit: 50 },
           false,
-          "resetFilters"
+          "resetFilters",
         ),
 
       setIsRecomputing: (v) =>
         set({ isRecomputing: v }, false, "setIsRecomputing"),
     }),
-    { name: "LeaderboardStore" }
-  )
+    { name: "LeaderboardStore" },
+  ),
 );
-
-// Selectors
-
-export const useLeaderboardFilters = () =>
-  useLeaderboardStore((s) => ({
-    scope: s.scope,
-    eventId: s.eventId ?? undefined,
-    page: s.page,
-    limit: s.limit,
-  }));

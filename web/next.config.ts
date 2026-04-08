@@ -7,10 +7,18 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       {
         protocol: "https",
-        hostname: "lh3.googleusercontent.com"
+        hostname: "lh3.googleusercontent.com",
+      },
+      {
+        protocol: "https",
+        hostname: "avatars.githubusercontent.com",
+      },
+      {
+        protocol: "https",
+        hostname: "res.cloudinary.com",
       }
-    ]
-  }
+    ],
+  },
 };
 
 export default withSentryConfig(nextConfig, {
@@ -48,5 +56,5 @@ export default withSentryConfig(nextConfig, {
       // Automatically tree-shake Sentry logger statements to reduce bundle size
       removeDebugLogging: true,
     },
-  }
+  },
 });

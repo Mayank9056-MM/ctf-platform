@@ -1,6 +1,6 @@
 import { useRouter } from "next/navigation";
 import { registerApi } from "../api/auth.api";
-import { RegisterFormData } from "../validation/auth.validator";
+import { RegisterFormData } from "../schema/auth.schema";
 import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ApiError } from "@/shared/lib/api-error";

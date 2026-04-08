@@ -78,7 +78,7 @@ export type LeaderboardQueryFilters = {
 export type LeaderboardUIState = {
   // Filter controls
   scope: LeaderboardScope;
-  eventId: string | null;
+  eventId: string | undefined;
   page: number;
   limit: number;
 
@@ -87,7 +87,7 @@ export type LeaderboardUIState = {
 
   // Actions
   setScope: (scope: LeaderboardScope) => void;
-  setEventId: (id: string | null) => void;
+  setEventId: (id: string | undefined) => void;
   setPage: (page: number) => void;
   setLimit: (limit: number) => void;
   resetFilters: () => void;
