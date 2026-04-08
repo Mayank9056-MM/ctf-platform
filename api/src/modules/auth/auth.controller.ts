@@ -202,6 +202,10 @@ const resetPassword = asyncHandler(async (req, res) => {
 
   const data = parseBody(resetPasswordSchema, req.body);
 
+  if (data.newPassword !== data.confirmPassword) {
+    throw new ApiError(400, "Passwords do not match");
+  }
+
   await authService.resetPassword({
     ...data,
     token,
