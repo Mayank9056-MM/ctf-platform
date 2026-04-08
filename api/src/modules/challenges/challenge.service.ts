@@ -4,15 +4,8 @@ import Challenge, {
   IChallenge,
 } from "../../models/challenge.model";
 import { ApiError } from "../../utils/ApiError";
-import crypto from "crypto";
 import Submission, { ISubmission } from "../../models/submission.model";
-import {
-  DIFFICULTY_SORT_ORDER,
-  FLAG_SHARE_ALERT_THRESHOLD,
-  MAX_FLAG_ATTEMPTS_PER_WINDOW,
-  RATE_LIMIT_WINDOW_MS,
-} from "../../utils/constants";
-import logger from "../../utils/logger";
+import { DIFFICULTY_SORT_ORDER } from "../../utils/constants";
 import User from "../../models/user.model";
 import { calculateDynamicPoints } from "../../utils/helpers";
 import {
@@ -24,9 +17,7 @@ import {
   purchasedHintResult,
   UpdateChallengeInput,
 } from "./challenge.types";
-import Team from "../../models/team.model";
 import AuditLog, { IAuditLogModel } from "../../models/auditlog.model";
-import escapeStringRegexp from "escape-string-regexp";
 
 class ChallengeService {
   private ALLOWED_CHALLENGE_UPDATE_FIELDS = [
@@ -108,6 +99,8 @@ class ChallengeService {
     if (tags?.length) {
       query.tags = { $in: tags };
     }
+
+    const escapeStringRegexp = (await import("escape-string-regexp")).default;
 
     if (search) {
       query.title = { $regex: escapeStringRegexp(search), $options: "i" };
@@ -432,8 +425,12 @@ class ChallengeService {
    * @throws {ApiError} 500 - If the challenge creation fails.
    */
   async createChallenge(data: CreateChallengePayload): Promise<IChallenge> {
+    const escapeStringRegexp = (await import("escape-string-regexp")).default;
+
     const exists = await Challenge.findOne({
-      title: { $regex: new RegExp(`^${escapeStringRegexp(data.title)}$`, "i") },
+      title: {
+        $regex: new RegExp(`^${escapeStringRegexp(data.title)}$`, "i"),
+      },
     });
 
     if (exists) {
@@ -484,6 +481,8 @@ class ChallengeService {
     requesterId: Types.ObjectId
   ): Promise<IChallenge> {
     const challenge = await this.findActiveChallenges(challengeId);
+
+    const escapeStringRegexp = (await import("escape-string-regexp")).default;
 
     if (data.title && data.title !== challenge.title) {
       const duplicate = await Challenge.findOne({
