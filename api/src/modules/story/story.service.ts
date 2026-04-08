@@ -23,7 +23,6 @@ import {
   UpdateNodePayload,
   UpdateStoryPayload,
 } from "./story.types";
-import escapeStringRegexp from "escape-string-regexp";
 import UserStoryProgress, {
   IUserStoryProgress,
 } from "../../models/userProgressStory.model";
@@ -124,6 +123,8 @@ class StoryService {
    */
   async getStories(filters: StoryFilters, userId?: Types.ObjectId) {
     const { status, difficulty, tags, search, page, limit } = filters;
+
+    const escapeStringRegexp = (await import("escape-string-regexp")).default;
 
     const query: Record<string, unknown> = {};
     if (status) {
@@ -1016,6 +1017,8 @@ class StoryService {
    * @returns {Promise<IStory>} - A promise that resolves to the newly created story.
    */
   async createStory(payload: CreateStoryPayload): Promise<IStory> {
+    const escapeStringRegexp = (await import("escape-string-regexp")).default;
+
     const exists = await Story.findOne({
       title: {
         $regex: new RegExp(`^${escapeStringRegexp(payload.title)}$`, "i"),
@@ -1038,6 +1041,8 @@ class StoryService {
     const { storyId, requesterId: _r, ...rest } = payload;
     const story = await Story.findById(storyId);
     if (!story) throw new ApiError(404, "Story not found");
+
+    const escapeStringRegexp = (await import("escape-string-regexp")).default;
 
     if (rest.title && rest.title !== story.title) {
       const dup = await Story.findOne({
