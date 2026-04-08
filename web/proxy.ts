@@ -13,6 +13,7 @@ const PUBLIC_EXACT: Set<string> = new Set([
   "/register",
   "/forgot-password",
   "/verify-email",
+  "/reset-password",
 ]);
 
 /**
