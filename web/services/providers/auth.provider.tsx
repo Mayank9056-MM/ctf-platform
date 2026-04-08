@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import { toast } from "sonner";
@@ -112,7 +112,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <GoogleOAuthProvider clientId={googleClientId}>
-      <SessionHydrator>{children}</SessionHydrator>
+      <Suspense fallback={null}>
+        <SessionHydrator>{children}</SessionHydrator>
+      </Suspense>
     </GoogleOAuthProvider>
   );
 }
