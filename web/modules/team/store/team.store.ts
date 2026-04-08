@@ -82,31 +82,3 @@ export const useTeamStore = create<TeamUIState>()(
     { name: "TeamStore" },
   ),
 );
-
-export const useTeamPanelState = () =>
-  useTeamStore((s) => ({
-    activeView: s.activeView,
-    joinCodeInput: s.joinCodeInput,
-    inviteUsernameInput: s.inviteUsernameInput,
-    isEditingTeam: s.isEditingTeam,
-    setActiveView: s.setActiveView,
-    setJoinCodeInput: s.setJoinCodeInput,
-    setInviteUsernameInput: s.setInviteUsernameInput,
-    setIsEditingTeam: s.setIsEditingTeam,
-    resetInputs: s.resetInputs,
-  }));
-
-export const useTeamSearchState = () =>
-  useTeamStore((s) => ({
-    query: s.searchQuery,
-    page: s.searchPage,
-    country: s.searchCountry,
-    sortBy: s.searchSortBy,
-    sortOrder: s.searchSortOrder,
-    setQuery: s.setSearchQuery,
-    setPage: s.setSearchPage,
-    setCountry: s.setSearchCountry,
-    setSortBy: s.setSearchSortBy,
-    setSortOrder: s.setSearchSortOrder,
-    resetSearch: s.resetSearchState,
-  }));
