@@ -55,8 +55,8 @@ process.on("uncaughtException", (error) => {
 
       logger.info("📦 Database connection:", getDBStatus());
       logger.info("📊 Available endpoints:");
-      logger.info(`   Health check: http://localhost:${PORT}/health`);
-      logger.info(`   API Base: http://localhost:${PORT}/api`);
+      logger.info(`   Health check: http://localhost:${PORT}/api/v1/health`);
+      logger.info(`   API Base: http://localhost:${PORT}/api/v1`);
       logger.info(`   Database: ${config.MONGODB_URI.split("@")[1]}`);
       logger.info(
         `   Email Service: ${config.SMTP_HOST ? "Enabled" : "Disabled"}`
