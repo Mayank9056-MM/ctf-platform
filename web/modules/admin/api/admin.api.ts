@@ -29,7 +29,8 @@ function buildParams(obj: Record<string, unknown>): URLSearchParams {
 // Dashboard
 
 export async function getDashboardStatsApi(): Promise<PlatformStats> {
-  const res = await api.get<ApiResponse<PlatformStats>>("/admin/dashboard");
+  const res = await api.get<ApiResponse<PlatformStats>>("api/v1/admin/dashboard");
+  console.log(res, "dashboard stats");
   return res.data.data;
 }
 
@@ -39,12 +40,12 @@ export async function adminGetUsersApi(
   filters: AdminUserFilters = {},
 ): Promise<{ users: AdminUser[]; meta: PaginationMeta }> {
   const params = buildParams(filters as Record<string, unknown>);
-  const res = await api.get(`/admin/users?${params}`);
+  const res = await api.get(`api/v1/admin/users?${params}`);
   return { users: res.data.data.users, meta: res.data.data.meta };
 }
 
 export async function adminGetUserByIdApi(userId: string): Promise<AdminUser> {
-  const res = await api.get<ApiResponse<AdminUser>>(`/admin/users/${userId}`);
+  const res = await api.get<ApiResponse<AdminUser>>(`api/v1/admin/users/${userId}`);
   return res.data.data;
 }
 
@@ -53,7 +54,7 @@ export async function adminUpdateUserApi(
   payload: AdminUpdateUserFormData,
 ): Promise<AdminUser> {
   const res = await api.patch<ApiResponse<AdminUser>>(
-    `/admin/users/${userId}`,
+    `api/v1/admin/users/${userId}`,
     payload,
   );
   return res.data.data;
@@ -64,7 +65,7 @@ export async function adminBanUserApi(
   payload: BanUserFormData,
 ): Promise<AdminUser> {
   const res = await api.post<ApiResponse<AdminUser>>(
-    `/admin/users/${userId}/ban`,
+    `api/v1/admin/users/${userId}/ban`,
     payload,
   );
   return res.data.data;
@@ -72,7 +73,7 @@ export async function adminBanUserApi(
 
 export async function adminUnbanUserApi(userId: string): Promise<AdminUser> {
   const res = await api.post<ApiResponse<AdminUser>>(
-    `/admin/users/${userId}/unban`,
+    `api/v1/admin/users/${userId}/unban`,
   );
   return res.data.data;
 }
@@ -82,14 +83,14 @@ export async function adminChangeRoleApi(
   payload: ChangeRoleFormData,
 ): Promise<AdminUser> {
   const res = await api.patch<ApiResponse<AdminUser>>(
-    `/admin/users/${userId}/role`,
+    `api/v1/admin/users/${userId}/role`,
     payload,
   );
   return res.data.data;
 }
 
 export async function adminDeleteUserApi(userId: string): Promise<void> {
-  await api.delete(`/admin/users/${userId}`);
+  await api.delete(`api/v1/admin/users/${userId}`);
 }
 
 // Score management
@@ -99,7 +100,7 @@ export async function adminManualScoreAdjustApi(
   payload: ManualScoreAdjustFormData,
 ): Promise<{ newScore: number; delta: number }> {
   const res = await api.post<ApiResponse<{ newScore: number; delta: number }>>(
-    `/admin/users/${userId}/score/adjust`,
+    `api/v1/admin/users/${userId}/score/adjust`,
     payload,
   );
   return res.data.data;
@@ -110,7 +111,7 @@ export async function adminRecalculateScoresApi(): Promise<{
   teamsUpdated: number;
   durationMs: number;
 }> {
-  const res = await api.post(`/admin/scores/recalculate`);
+  const res = await api.post(`api/v1/admin/scores/recalculate`);
   return res.data.data;
 }
 
@@ -120,19 +121,19 @@ export async function adminGetAdminsApi(
   filters: AdminListFilters = {},
 ): Promise<{ admins: AdminUser[]; meta: PaginationMeta }> {
   const params = buildParams(filters as Record<string, unknown>);
-  const res = await api.get(`/admin/admins?${params}`);
+  const res = await api.get(`api/v1/admin/admins?${params}`);
   return { admins: res.data.data.admins, meta: res.data.data.meta };
 }
 
 export async function adminCreateAdminApi(
   payload: CreateAdminFormData,
 ): Promise<AdminUser> {
-  const res = await api.post<ApiResponse<AdminUser>>("/admin/admins", payload);
+  const res = await api.post<ApiResponse<AdminUser>>("api/v1/admin/admins", payload);
   return res.data.data;
 }
 
 export async function adminRevokeAdminApi(userId: string): Promise<void> {
-  await api.delete(`/admin/admins/${userId}`);
+  await api.delete(`api/v1/admin/admins/${userId}`);
 }
 
 // Audit logs
@@ -141,7 +142,7 @@ export async function adminGetAuditLogsApi(
   filters: AuditLogFilters = {},
 ): Promise<{ logs: AuditLog[]; meta: PaginationMeta }> {
   const params = buildParams(filters as Record<string, unknown>);
-  const res = await api.get(`/admin/audit-logs?${params}`);
+  const res = await api.get(`api/v1/admin/audit-logs?${params}`);
   return { logs: res.data.data.logs, meta: res.data.data.meta };
 }
 
@@ -149,7 +150,7 @@ export async function adminGetAuditLogByIdApi(
   logId: string,
 ): Promise<AuditLog> {
   const res = await api.get<ApiResponse<AuditLog>>(
-    `/admin/audit-logs/${logId}`,
+    `api/v1/admin/audit-logs/${logId}`,
   );
   return res.data.data;
 }
