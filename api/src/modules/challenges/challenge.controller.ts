@@ -14,7 +14,7 @@ import {
   buildAttachmentKey,
   deleteFromR2,
   uploadToR2,
-} from "../../config/r2.upload";
+} from "../../config/s3.upload";
 import logger from "../../utils/logger";
 import {
   embedFlagInImage,
