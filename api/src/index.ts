@@ -77,16 +77,6 @@ if (process.env.NODE_ENV === "development") {
   );
 }
 
-// Global Error Handler
-app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
-  logger.error(err.stack);
-  res.status(500).json({
-    status: "error",
-    message: err.message || "Internal server error",
-    ...(process.env.NODE_ENV === "development" && { stack: err.stack }),
-  });
-});
-
 // import routes
 import authRouter from "./modules/auth/auth.routes";
 import teamRouter from "./modules/teams/team.route";
@@ -121,6 +111,16 @@ app.use((req, res) => {
   res.status(404).json({
     status: "error",
     message: "Route not found ❌",
+  });
+});
+
+// Global Error Handler
+app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+  logger.error(err.stack);
+  res.status(500).json({
+    status: "error",
+    message: err.message || "Internal server error",
+    ...(process.env.NODE_ENV === "development" && { stack: err.stack }),
   });
 });
 
