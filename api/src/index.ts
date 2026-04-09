@@ -90,6 +90,8 @@ import announcementRouter from "./modules/announcement/announcement.routes";
 import userRouter from "./modules/users/user.routes";
 import refreshTokenRouter from "./modules/refreshToken/refreshToken.routes";
 import leaderboardRouter from "./modules/leaderboard/leaderboard.routes";
+import { ApiError } from "./utils/ApiError";
+import { config } from "./config/config";
 
 // routes
 app.use("/api/v1/auth", authRouter);
@@ -115,12 +117,28 @@ app.use((req, res) => {
 });
 
 // Global Error Handler
-app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
-  logger.error(err.stack);
-  res.status(500).json({
-    status: "error",
-    message: err.message || "Internal server error",
-    ...(process.env.NODE_ENV === "development" && { stack: err.stack }),
+app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
+  let statusCode = 500;
+  let message = "Internal server error";
+  let errors: unknown[] = [];
+
+  if (err instanceof ApiError) {
+    statusCode = err.statusCode;
+    message = err.message;
+    errors = err.errors || [];
+  } else if (err instanceof Error) {
+    message = err.message;
+  }
+
+  logger.error(err);
+
+  res.status(statusCode).json({
+    success: false,
+    message,
+    errors,
+    ...(config.NODE_ENV === "development" && {
+      stack: err instanceof Error ? err.stack : null,
+    }),
   });
 });
 
