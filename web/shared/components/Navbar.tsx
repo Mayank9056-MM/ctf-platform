@@ -6,6 +6,8 @@ import {
   Bell,
   ChevronDown,
   Command,
+  Crown,
+  LayoutDashboard,
   LogOut,
   Menu,
   Search,
@@ -13,13 +15,25 @@ import {
   X,
 } from "lucide-react";
 import { ConnectionIndicator } from "@/shared/components/ConnectionIndicator";
-import { NAV_ITEMS, USER_DROPDOWN_FOOTER, USER_DROPDOWN_ITEMS } from "../lib/navbar.config";
+import {
+  NAV_ITEMS,
+  USER_DROPDOWN_FOOTER,
+  USER_DROPDOWN_ITEMS,
+} from "../lib/navbar.config";
 import { useNavbar } from "../hooks/useNavbar";
 import { DropdownItem, NavItem } from "../types/navbar.types";
 import { cn } from "@/lib/utils";
 
 // NavLink
 
+/**
+ * A custom Link component for navigation items.
+ *
+ * @param {NavItem} item - The navigation item to render.
+ * @param {boolean} isActive - Whether the item is active or not.
+ * @param {number} [liveCount] - The count of live events if the item is an events link.
+ * @returns {ReactElement} A custom Link component.
+ */
 function NavLink({
   item,
   isActive,
@@ -66,6 +80,13 @@ function NavLink({
 
 // Bell
 
+/**
+ * A notification bell component.
+ *
+ * @param {Object} props - Component props
+ * @param {number} props.count - The number of unread notifications
+ * @returns {React.ReactElement} A notification bell component
+ */
 function NotifBell({ count }: { count: number }) {
   return (
     <Link
@@ -85,6 +106,10 @@ function NotifBell({ count }: { count: number }) {
 
 // Search trigger
 
+/**
+ * A search trigger button that expands to show a dropdown menu when clicked.
+ * @param {function} onClick - The callback function when the button is clicked.
+ */
 function SearchTrigger({ onClick }: { onClick: () => void }) {
   return (
     <button
@@ -103,6 +128,14 @@ function SearchTrigger({ onClick }: { onClick: () => void }) {
 
 // User button
 
+/**
+ * A button that displays the user's avatar and username.
+ * When clicked, it expands to show a dropdown menu.
+ *
+ * @param {object} user - The user object, containing `avatar` and `username`.
+ * @param {boolean} isOpen - Whether the dropdown menu is open.
+ * @param {function} onClick - The callback function when the button is clicked.
+ */
 function UserButton({
   user,
   isOpen,
@@ -154,6 +187,14 @@ function UserButton({
 
 // Dropdown item
 
+/**
+ * A dropdown menu item.
+ *
+ * @param {DropdownItem} item - The item to render. Must contain a label and can optionally contain an icon, description, and href.
+ * @param {function} onClose - A function to call when the user clicks outside of the dropdown menu.
+ *
+ * @returns {ReactElement} A React element representing the dropdown menu item.
+ */
 function DropdownMenuItem({
   item,
   onClose,
@@ -203,8 +244,61 @@ function DropdownMenuItem({
   );
 }
 
+// Admin Panel Link
+
+/**
+ * A link to the admin panel.
+ *
+ * This component is only shown inside the dropdown / mobile menu when the user's role is "admin" or "superadmin".
+ *
+ * @param {string} role - The user's role.
+ * @param {function} onClose - A function to close the dropdown / mobile menu.
+ * @returns {ReactElement} A link to the admin panel.
+ */
+function AdminPanelLink({
+  role,
+  onClose,
+}: {
+  role: string;
+  onClose: () => void;
+}) {
+  const isSuperAdmin = role === "superadmin";
+
+  return (
+    <Link
+      href="/admin"
+      onClick={onClose}
+      className="group flex items-center gap-3 rounded-xl px-3 py-2.5 transition-all hover:bg-amber-500/[0.06]"
+    >
+      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 ring-1 ring-amber-500/20">
+        {isSuperAdmin ? (
+          <Crown className="h-3.5 w-3.5 text-amber-400" />
+        ) : (
+          <LayoutDashboard className="h-3.5 w-3.5 text-amber-400" />
+        )}
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium text-amber-300 group-hover:text-amber-200 transition-colors">
+          Admin Dashboard
+        </p>
+        <p className="text-[11px] text-slate-600 capitalize">{role}</p>
+      </div>
+    </Link>
+  );
+}
+
 // User dropdown
 
+/**
+ * User dropdown component
+ *
+ * @param {NonNullable<ReturnType<typeof useNavbar>["user"]>} user - The user object from the navbar context
+ * @param {boolean} isOpen - Whether the menu is open or not
+ * @param {React.RefObject<HTMLDivElement | null>} menuRef - The ref object for the menu container
+ * @param {() => void} onClose - A callback function to close the menu
+ * @param {() => void} onLogout - A callback function to sign out the user
+ * @param {boolean} isLoggingOut - Whether the user is logging out or not
+ */
 function UserDropdown({
   user,
   isOpen,
@@ -222,7 +316,7 @@ function UserDropdown({
 }) {
   if (!isOpen) return null;
 
-  console.log(user,"user");
+  const isAdmin = user.role === "admin" || user.role === "superadmin";
 
   return (
     <div
@@ -253,8 +347,15 @@ function UserDropdown({
             </p>
             <p className="truncate text-xs text-slate-500">{user.email}</p>
             <div className="mt-1 flex items-center gap-1.5">
-              <span className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 font-mono text-[9px] font-medium text-emerald-400 ring-1 ring-emerald-500/20">
-                player
+              <span
+                className={cn(
+                  "rounded-full px-1.5 py-0.5 font-mono text-[9px] font-medium ring-1",
+                  isAdmin
+                    ? "bg-amber-500/10 text-amber-400 ring-amber-500/20"
+                    : "bg-emerald-500/10 text-emerald-400 ring-emerald-500/20",
+                )}
+              >
+                {user.role ?? "player"}
               </span>
               {!user.isVerified && (
                 <span className="rounded-full bg-orange-500/10 px-1.5 py-0.5 font-mono text-[9px] text-orange-400 ring-1 ring-orange-500/20">
@@ -295,6 +396,13 @@ function UserDropdown({
         </div>
       </div>
 
+      {/* Admin panel link — only for admin / superadmin */}
+      {isAdmin && (
+        <div className="border-b border-white/[0.05] px-2 py-2">
+          <AdminPanelLink role={user.role!} onClose={onClose} />
+        </div>
+      )}
+
       {/* Menu items */}
       <div className="px-2 py-2">
         {USER_DROPDOWN_ITEMS.map((item) => (
@@ -326,6 +434,18 @@ function UserDropdown({
 
 // Search overlay
 
+/**
+ * A search overlay component that will render a search input and close button
+ * when the `isOpen` prop is `true`.
+ * The component will render a fixed position overlay with a dark background and
+ * a centered search input with a close button.
+ * Clicking outside the search input will trigger the `onClose` prop.
+ * The search input will be focused when the component is rendered.
+ *
+ * @param {boolean} isOpen - Whether the search overlay should be open
+ * @param {() => void} onClose - Callback for when the search overlay should be closed
+ * @param {React.RefObject<HTMLInputElement | null>} searchRef - A ref to the search input
+ */
 function SearchOverlay({
   isOpen,
   onClose,
@@ -373,6 +493,17 @@ function SearchOverlay({
 
 // Mobile drawer
 
+/**
+ * Mobile menu component
+ *
+ * @param {boolean} isOpen - Whether the menu is open or not
+ * @param {ReturnType<typeof useNavbar>["user"]} user - The user object from the navbar context
+ * @param {(href: string) => boolean} isActive - A callback function to determine if a link is active or not
+ * @param {number} liveCount - The number of live events
+ * @param {() => void} onClose - A callback function to close the menu
+ * @param {() => void} onLogout - A callback function to sign out the user
+ * @param {boolean} isLoggingOut - Whether the user is logging out or not
+ */
 function MobileMenu({
   isOpen,
   user,
@@ -391,6 +522,8 @@ function MobileMenu({
   isLoggingOut: boolean;
 }) {
   if (!isOpen) return null;
+
+  const isAdmin = user?.role === "admin" || user?.role === "superadmin";
 
   return (
     <div className="fixed inset-0 z-50 lg:hidden">
@@ -439,9 +572,16 @@ function MobileMenu({
                   )}
                 </div>
                 <div className="min-w-0">
-                  <p className="truncate font-mono text-sm font-semibold text-white">
-                    {user.username}
-                  </p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="truncate font-mono text-sm font-semibold text-white">
+                      {user.username}
+                    </p>
+                    {isAdmin && (
+                      <span className="rounded-full bg-amber-500/10 px-1.5 py-0.5 font-mono text-[9px] text-amber-400 ring-1 ring-amber-500/20 capitalize shrink-0">
+                        {user.role}
+                      </span>
+                    )}
+                  </div>
                   <div className="mt-0.5 flex items-center gap-1.5">
                     <span className="font-mono text-xs font-bold text-emerald-400">
                       {(user.score ?? 0).toLocaleString()} pts
@@ -488,6 +628,49 @@ function MobileMenu({
                 )}
               </Link>
             ))}
+
+            {/* Admin panel link — mobile */}
+            {isAdmin && user && (
+              <>
+                <p className="px-3 pb-1 pt-4 font-mono text-[9px] uppercase tracking-[0.2em] text-slate-700">
+                  Admin
+                </p>
+                <Link
+                  href="/admin"
+                  onClick={onClose}
+                  className={cn(
+                    "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all",
+                    isActive("/admin")
+                      ? "bg-amber-500/10 text-amber-300"
+                      : "text-slate-500 hover:bg-amber-500/[0.06] hover:text-amber-300",
+                  )}
+                >
+                  {user.role === "superadmin" ? (
+                    <Crown
+                      className={cn(
+                        "h-4 w-4",
+                        isActive("/admin")
+                          ? "text-amber-400"
+                          : "text-slate-600",
+                      )}
+                    />
+                  ) : (
+                    <LayoutDashboard
+                      className={cn(
+                        "h-4 w-4",
+                        isActive("/admin")
+                          ? "text-amber-400"
+                          : "text-slate-600",
+                      )}
+                    />
+                  )}
+                  Admin Dashboard
+                  {isActive("/admin") && (
+                    <span className="ml-auto h-1.5 w-1.5 rounded-full bg-amber-400" />
+                  )}
+                </Link>
+              </>
+            )}
 
             <p className="px-3 pb-1 pt-4 font-mono text-[9px] uppercase tracking-[0.2em] text-slate-700">
               Account
@@ -567,7 +750,7 @@ export function Navbar() {
             </span>
           </Link>
 
-          {/* Desktop nav — user links only */}
+          {/* Desktop nav */}
           <nav className="hidden items-center gap-0.5 lg:flex">
             {NAV_ITEMS.map((item) => (
               <NavLink
