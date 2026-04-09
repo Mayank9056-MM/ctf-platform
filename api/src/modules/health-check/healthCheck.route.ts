@@ -73,7 +73,7 @@ healthRouter.get("/ping", ping);
 /**
  * GET /health
  * Full health report across all services + system metrics.
- * Protected: valid JWT required + caller must hold the "super_admin" role.
+ * Protected: valid JWT required + caller must hold the "superadmin" role.
  * Rate-limited to prevent hammering downstream services.
  *
  * HTTP status reflects aggregate health:
@@ -84,7 +84,7 @@ healthRouter.get("/ping", ping);
 healthRouter.get(
   "/",
   verifyAuth,
-  requireRole("super_admin"),
+  requireRole("superadmin"),
   rateLimitHealth,
   getHealth
 );
@@ -93,12 +93,12 @@ healthRouter.get(
  * GET /health/services/:service
  * Drill-down check for a single named service.
  * :service → mongodb | redisCache | redisSession | storage | email | socket
- * Protected: valid JWT + super_admin role required.
+ * Protected: valid JWT + superadmin role required.
  */
 healthRouter.get(
   "/services/:service",
   verifyAuth,
-  requireRole("super_admin"),
+  requireRole("superadmin"),
   rateLimitHealth,
   getServiceHealth
 );
