@@ -26,11 +26,12 @@ import Link from "next/link";
 import { useAuthStore } from "@/modules/auth/store/auth.store";
 import { DashboardSkeleton } from "./dashboard/DashboardSkeleton";
 import { StatCard } from "./dashboard/StatCard";
-import { fmt, pct } from "../helpers/helpers";
 import { CategoryBar } from "./dashboard/CategoryBar";
 import { SolverRow } from "./dashboard/SolverRow";
 import { AuditRow } from "./dashboard/AuditRow";
-
+import { HealthCheckPanel } from "@/modules/health/components/HealthCheckPanel";
+import { fmt } from "@/shared/utils/fmt";
+import { pct } from "@/shared/utils/pct";
 
 /**
  * The admin dashboard page.
@@ -471,6 +472,8 @@ export default function AdminDashboardPage() {
             </p>
           )}
         </div>
+
+        <HealthCheckPanel />
       </motion.div>
     </div>
   );

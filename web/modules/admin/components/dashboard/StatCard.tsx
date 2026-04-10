@@ -1,8 +1,8 @@
 import { cn } from "@/lib/utils";
 import { motion } from "motion/react";
-import { fmt } from "../../helpers/helpers";
 import { TrendingDown, TrendingUp } from "lucide-react";
 import Link from "next/link";
+import { fmt } from "@/shared/utils/fmt";
 
 interface StatCardProps {
   label: string;
