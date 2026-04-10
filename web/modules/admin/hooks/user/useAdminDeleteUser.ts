@@ -4,6 +4,14 @@ import { adminKeys } from "../../queries/admin.queries";
 import { adminDeleteUserApi } from "../../api/admin.api";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
+/**
+ * Hook to delete a user by ID from the API.
+ *
+ * @returns {useMutation} - A react-query hook to delete the user.
+ *
+ * @example
+ * const { data, error, isLoading } = useAdminDeleteUser("1234567890abcdef");
+ */
 export function useAdminDeleteUser() {
   const qc = useQueryClient();
 

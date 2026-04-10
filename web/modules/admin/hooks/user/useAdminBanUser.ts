@@ -5,6 +5,16 @@ import { BanUserFormData } from "../../schema/admin.schema";
 import { ApiError } from "next/dist/server/api-utils";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
+/**
+ * Hook to ban a user by ID from the API.
+ *
+ * @param {string} userId - ID of the user to ban.
+ *
+ * @returns {useMutation} - A react-query hook to ban the user.
+ *
+ * @example
+ * const { data, error, isLoading } = useAdminBanUser("1234567890abcdef");
+ */
 export function useAdminBanUser(userId: string) {
   const qc = useQueryClient();
  
