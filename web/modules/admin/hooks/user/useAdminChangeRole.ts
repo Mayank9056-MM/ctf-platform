@@ -5,6 +5,19 @@ import { adminChangeRoleApi } from "../../api/admin.api";
 import { ChangeRoleFormData } from "../../schema/admin.schema";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
+/**
+ * Hook to change a user's role by ID from the API.
+ *
+ * @returns {useMutation} - A react-query hook to change the user's role.
+ *
+ * @example
+ * const { data, error, isLoading } = useAdminChangeRole({
+ *   userId: "1234567890abcdef",
+ *   payload: {
+ *     role: "user",
+ *   },
+ * });
+ */
 export function useAdminChangeRole() {
   const qc = useQueryClient();
  

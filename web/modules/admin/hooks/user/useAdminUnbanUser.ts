@@ -4,6 +4,16 @@ import { toast } from "sonner";
 import { adminUnbanUserApi } from "../../api/admin.api";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
+/**
+ * Hook to unban a user by ID from the API.
+ *
+ * @param {string} userId - ID of the user to unban.
+ *
+ * @returns {useMutation} - A react-query hook to unban the user.
+ *
+ * @example
+ * const { data, error, isLoading } = useAdminUnbanUser("1234567890abcdef");
+ */
 export function useAdminUnbanUser(userId: string) {
   const qc = useQueryClient();
  

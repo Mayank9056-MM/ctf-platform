@@ -5,6 +5,16 @@ import { AdminUpdateUserFormData } from "../../schema/admin.schema";
 import { adminUpdateUserApi } from "../../api/admin.api";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
+/**
+ * Hook to update a user by ID from the API.
+ *
+ * @param {string} userId - ID of the user to update.
+ *
+ * @returns {useMutation} - A react-query hook to update the user.
+ *
+ * @example
+ * const { data, error, isLoading } = useAdminUpdateUser("1234567890abcdef");
+ */
 export function useAdminUpdateUser(userId: string) {
   const qc = useQueryClient();
 

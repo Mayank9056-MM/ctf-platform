@@ -1,7 +1,7 @@
 import { CheckCircle2, XCircle } from "lucide-react";
-import { timeAgo } from "../../helpers/helpers";
 import { cn } from "@/lib/utils";
 import { motion } from "motion/react";
+import { timeAgo } from "@/shared/utils/time";
 
 const ACTION_STYLES: Record<string, { color: string; bg: string }> = {
   "user:ban": { color: "text-red-400", bg: "bg-red-500/10" },

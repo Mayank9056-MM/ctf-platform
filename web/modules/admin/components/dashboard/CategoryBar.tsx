@@ -1,5 +1,5 @@
+import { fmt } from "@/shared/utils/fmt";
 import { motion } from "motion/react";
-import { fmt } from "../../helpers/helpers";
 
 /**
  * A bar component that shows a category's label, count, and solves.

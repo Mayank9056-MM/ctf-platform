@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
+import { fmt } from "@/shared/utils/fmt";
 import { motion } from "motion/react";
-import { fmt } from "../../helpers/helpers";
 
 /**
  * A single row in the top solver table.
