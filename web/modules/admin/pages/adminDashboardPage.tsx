@@ -24,11 +24,11 @@ import { useAdminDashboard } from "@/modules/admin/hooks/dashboard/useAdminDashb
 import type { PlatformStats } from "@/modules/admin/types/admin.types";
 import Link from "next/link";
 import { useAuthStore } from "@/modules/auth/store/auth.store";
-import { DashboardSkeleton } from "./dashboard/DashboardSkeleton";
-import { StatCard } from "./dashboard/StatCard";
-import { CategoryBar } from "./dashboard/CategoryBar";
-import { SolverRow } from "./dashboard/SolverRow";
-import { AuditRow } from "./dashboard/AuditRow";
+import { DashboardSkeleton } from "../components/dashboard/DashboardSkeleton";
+import { StatCard } from "../components/dashboard/StatCard";
+import { CategoryBar } from "../components/dashboard/CategoryBar";
+import { SolverRow } from "../components/dashboard/SolverRow";
+import { AuditRow } from "../components/dashboard/AuditRow";
 import { HealthCheckPanel } from "@/modules/health/components/HealthCheckPanel";
 import { fmt } from "@/shared/utils/fmt";
 import { pct } from "@/shared/utils/pct";

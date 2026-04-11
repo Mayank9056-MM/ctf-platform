@@ -13,20 +13,20 @@ import {
   UserX,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { FilterBar } from "./users/FilterBar";
-import { SkeletonRow } from "./users/SkeletonRow";
 import { AnimatePresence, motion } from "motion/react";
-import { UserAvatar } from "./users/UserAvatar";
-import { RoleBadge } from "./users/RoleBadge";
-import { StatusBadge } from "./users/StatusBadge";
-import { RowActions } from "./users/RowActions";
-import { UserDetailPanel } from "./users/UserDetailPanel";
-import { BanModal } from "./users/BanModal";
-import { ConfirmModal } from "./users/ConfirmModal";
-import { ChangeRoleModal } from "./users/ChangeRoleModal";
-import { EditUserModal } from "./users/EditUserModal";
+import { ConfirmModal } from "../../../shared/components/ui/ConfirmModal";
 import { fmt } from "@/shared/utils/fmt";
 import { timeAgo } from "@/shared/utils/time";
+import { FilterBar } from "../components/users/FilterBar";
+import { SkeletonRow } from "../components/users/SkeletonRow";
+import { UserAvatar } from "../components/users/UserAvatar";
+import { RoleBadge } from "../components/users/RoleBadge";
+import { StatusBadge } from "../components/users/StatusBadge";
+import { RowActions } from "../components/users/RowActions";
+import { UserDetailPanel } from "../components/users/UserDetailPanel";
+import { BanModal } from "../components/users/BanModal";
+import { ChangeRoleModal } from "../components/users/ChangeRoleModal";
+import { EditUserModal } from "../components/users/EditUserModal";
 
 type SortHeaderProps = {
   field: AdminUserFilters["sortBy"];
