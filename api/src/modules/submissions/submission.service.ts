@@ -188,7 +188,8 @@ class SubmissionService {
 
     // Snapshot points BEFORE solveCount increments (critical for dynamic scoring)
     const pointsAwarded = isCorrect ? challenge.getCurrentPoints() : 0;
-    const isFirstBlood = isCorrect && !challenge.firstBlood;
+    const isFirstBlood =
+      isCorrect && (!challenge.firstBlood || !challenge.firstBlood.user);
 
     // Persist submission
     const submission = new Submission({
@@ -198,6 +199,7 @@ class SubmissionService {
       isCorrect,
       pointsAwarded,
       isFirstBlood,
+      flagHash: submittedHash,
       meta: { ipAddress: ip, userAgent: userAgent ?? null },
     });
 
