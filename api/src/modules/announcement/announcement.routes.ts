@@ -37,20 +37,36 @@ const superAdminGuard = [verifyAuth, requireRole("superadmin")];
  * POST   /announcements/admin/:id/retract      → retract announcement
  * DELETE /announcements/admin/:id              → hard delete (superadmin)
  */
-announcementRouter.get("/admin", adminGuard, adminGetAnnouncements);
-announcementRouter.get("/admin/stats", adminGuard, adminGetStats);
-announcementRouter.post("/admin", adminGuard, adminCreate);
+announcementRouter.get(
+  "/announcements/admin",
+  adminGuard,
+  adminGetAnnouncements
+);
+announcementRouter.get("/announcements/admin/stats", adminGuard, adminGetStats);
+announcementRouter.post("/announcements/admin", adminGuard, adminCreate);
 announcementRouter.post(
-  "/admin/dispatch-queue",
+  "/announcements/admin/dispatch-queue",
   superAdminGuard,
   adminRunDispatchQueue
 );
 
-announcementRouter.get("/admin/:id", adminGuard, adminGetById);
-announcementRouter.patch("/admin/:id", adminGuard, adminUpdate);
-announcementRouter.post("/admin/:id/publish", adminGuard, adminPublish);
-announcementRouter.post("/admin/:id/retract", adminGuard, adminRetract);
-announcementRouter.delete("/admin/:id", superAdminGuard, adminDelete);
+announcementRouter.get("/announcements/admin/:id", adminGuard, adminGetById);
+announcementRouter.patch("/announcements/admin/:id", adminGuard, adminUpdate);
+announcementRouter.post(
+  "/announcements/admin/:id/publish",
+  adminGuard,
+  adminPublish
+);
+announcementRouter.post(
+  "/announcements/admin/:id/retract",
+  adminGuard,
+  adminRetract
+);
+announcementRouter.delete(
+  "/announcements/admin/:id",
+  superAdminGuard,
+  adminDelete
+);
 
 // Player routes
 
@@ -65,8 +81,15 @@ announcementRouter.delete("/admin/:id", superAdminGuard, adminDelete);
  * POST /announcements/:id/dismiss
  *   → Dismiss an announcement from the feed. Auth required.
  */
-announcementRouter.get("/announcements", optionalAuth, getFeed);
-announcementRouter.get("/challenge/:challengeId", getChallengeAnnouncements);
-announcementRouter.post("/:id/dismiss", verifyAuth, dismissAnnouncement);
+announcementRouter.get("/announcements/", optionalAuth, getFeed);
+announcementRouter.get(
+  "/announcements/challenge/:challengeId",
+  getChallengeAnnouncements
+);
+announcementRouter.post(
+  "/announcements/:id/dismiss",
+  verifyAuth,
+  dismissAnnouncement
+);
 
 export default announcementRouter;
