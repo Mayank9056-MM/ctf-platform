@@ -564,10 +564,10 @@ challengeSchema.methods.recordSolve = async function (
   const pointsAwarded = this.getCurrentPoints();
 
   // Set first blood only once
-  if (!this.firstBlood) {
+  if (!this.firstBlood || !this.firstBlood.user) {
     this.firstBlood = {
       user: userId,
-      team: teamId,
+      team: teamId ?? undefined,
       solvedAt: new Date(),
     };
   }
