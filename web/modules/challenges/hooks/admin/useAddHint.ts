@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { adminAddHintApi } from "../api/challenges.api";
-import { AddHintInput } from "../types/challenge.types";
-import { challengeKeys } from "../queries/challenge.keys";
+import { adminAddHintApi } from "../../api/challenges.api";
+import { AddHintInput } from "../../types/challenge.types";
+import { challengeKeys } from "../../queries/challenge.keys";
 import { ApiError } from "next/dist/server/api-utils";
 import { toast } from "sonner";
 

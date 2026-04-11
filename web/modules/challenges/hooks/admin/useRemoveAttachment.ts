@@ -1,7 +1,7 @@
 import { ApiError } from "next/dist/server/api-utils";
 import { toast } from "sonner";
-import { challengeKeys } from "../queries/challenge.keys";
-import { adminRemoveAttachmentApi } from "../api/challenges.api";
+import { challengeKeys } from "../../queries/challenge.keys";
+import { adminRemoveAttachmentApi } from "../../api/challenges.api";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 export function useRemoveAttachment(challengeId: string) {
