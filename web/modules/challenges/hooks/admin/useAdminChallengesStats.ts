@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { adminGetChallengeStatsApi } from "../api/challenges.api";
-import { challengeKeys } from "../queries/challenge.keys";
+import { challengeKeys } from "../../queries/challenge.keys";
+import { adminGetChallengeStatsApi } from "../../api/challenges.api";
 
 export function useAdminChallengeStats() {
   return useQuery({

@@ -1,7 +1,7 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { adminGetChallengesApi } from "../api/challenges.api";
-import { challengeKeys } from "../queries/challenge.keys";
-import { ChallengeFilters } from "../types/challenge.types";
+import { adminGetChallengesApi } from "../../api/challenges.api";
+import { challengeKeys } from "../../queries/challenge.keys";
+import { ChallengeFilters } from "../../types/challenge.types";
 
 export function useAdminChallenges(filters: ChallengeFilters = {}) {
   return useQuery({

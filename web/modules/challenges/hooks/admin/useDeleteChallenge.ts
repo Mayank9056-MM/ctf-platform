@@ -1,8 +1,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { adminDeleteChallengeApi } from "../api/challenges.api";
-import { challengeKeys } from "../queries/challenge.keys";
 import { ApiError } from "next/dist/server/api-utils";
 import { toast } from "sonner";
+import { adminDeleteChallengeApi } from "../../api/challenges.api";
+import { challengeKeys } from "../../queries/challenge.keys";
 
 export function useDeleteChallenge() {
   const qc = useQueryClient();

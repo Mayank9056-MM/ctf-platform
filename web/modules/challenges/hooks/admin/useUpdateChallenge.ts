@@ -1,9 +1,9 @@
 import { ApiError } from "next/dist/server/api-utils";
-import { challengeKeys } from "../queries/challenge.keys";
-import { UpdateChallengeInput } from "../types/challenge.types";
 import { toast } from "sonner";
-import { adminUpdateChallengeApi } from "../api/challenges.api";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { adminUpdateChallengeApi } from "../../api/challenges.api";
+import { UpdateChallengeInput } from "../../types/challenge.types";
+import { challengeKeys } from "../../queries/challenge.keys";
 
 export function useUpdateChallenge(challengeId: string) {
   const qc = useQueryClient();
