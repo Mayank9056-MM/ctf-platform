@@ -34,13 +34,29 @@ const superAdminGuard = [verifyAuth, requireRole("superadmin")];
  * PATCH  /notifications/admin/:id/read         → mark read (admin)
  * DELETE /notifications/admin/:id              → hard delete (superadmin)
  */
-notificationRouter.post("/admin/dispatch", adminGuard, adminDispatch);
-notificationRouter.get("/admin", adminGuard, adminGetNotifications);
-notificationRouter.get("/admin/stats", adminGuard, adminGetStats);
-notificationRouter.get("/admin/:id", adminGuard, adminGetNotificationById);
-notificationRouter.patch("/admin/:id/read", adminGuard, adminMarkRead);
+notificationRouter.post(
+  "/notifications/admin/dispatch",
+  adminGuard,
+  adminDispatch
+);
+notificationRouter.get(
+  "/notifications/admin",
+  adminGuard,
+  adminGetNotifications
+);
+notificationRouter.get("/notifications/admin/stats", adminGuard, adminGetStats);
+notificationRouter.get(
+  "/notifications/admin/:id",
+  adminGuard,
+  adminGetNotificationById
+);
+notificationRouter.patch(
+  "/notifications/admin/:id/read",
+  adminGuard,
+  adminMarkRead
+);
 notificationRouter.delete(
-  "/admin/:id",
+  "/notifications/admin/:id",
   superAdminGuard,
   adminDeleteNotification
 );
@@ -58,11 +74,19 @@ notificationRouter.delete(
  */
 notificationRouter.get("/notifications/summary", verifyAuth, getInboxSummary);
 notificationRouter.get("/notifications", verifyAuth, getMyNotifications);
-notificationRouter.patch("/read", verifyAuth, markAsRead);
+notificationRouter.patch("/notifications/read", verifyAuth, markAsRead);
 notificationRouter.delete("/notifications", verifyAuth, clearMyInbox);
 
-notificationRouter.get("/:id", verifyAuth, getNotificationById);
-notificationRouter.post("/:id/dismiss", verifyAuth, dismissBroadcast);
-notificationRouter.delete("/:id", verifyAuth, deleteMyNotification);
+notificationRouter.get("/notifications/:id", verifyAuth, getNotificationById);
+notificationRouter.post(
+  "/notifications/:id/dismiss",
+  verifyAuth,
+  dismissBroadcast
+);
+notificationRouter.delete(
+  "/notifications/:id",
+  verifyAuth,
+  deleteMyNotification
+);
 
 export default notificationRouter;
