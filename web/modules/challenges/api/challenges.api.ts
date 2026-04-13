@@ -36,7 +36,7 @@ export async function getChallengesApi(
 
   const res = await api.get<
     ApiResponse<{ challenges: ChallengeSummary[]; meta: PaginationMeta }>
-  >(`/challenges?${params}`);
+  >(`api/v1/challenges?${params}`);
 
   return res.data.data;
 }
@@ -46,10 +46,11 @@ export async function getChallengesApi(
 export async function getChallengeDetailApi(
   idOrSlug: string,
 ): Promise<Challenge> {
-  const res = await api.get<ApiResponse<{ challenge: Challenge }>>(
-    `/challenges/${idOrSlug}`,
+  const res = await api.get<ApiResponse<Challenge>>(
+    `api/v1/challenges/${idOrSlug}`,
   );
-  return res.data.data.challenge;
+
+  return res.data.data;
 }
 
 // POST /challenges/:id/hints
@@ -59,7 +60,7 @@ export async function purchaseHintApi(
   hintIndex: number,
 ): Promise<PurchasedHintResult> {
   const res = await api.post<ApiResponse<PurchasedHintResult>>(
-    `/challenges/${challengeId}/hints`,
+    `api/v1/challenges/${challengeId}/hints`,
     { hintIndex },
   );
   return res.data.data;
@@ -73,7 +74,7 @@ export async function getChallengeSolvesApi(
   limit = 20,
 ): Promise<{ solves: ChallengeSolve[]; meta: PaginationMeta }> {
   const res = await api.get(
-    `/challenges/${challengeId}/solves?page=${page}&limit=${limit}`,
+    `api/v1/challenges/${challengeId}/solves?page=${page}&limit=${limit}`,
   );
   return {
     solves: res.data.data.solves,
@@ -92,7 +93,7 @@ export async function adminGetChallengesApi(
 
   const res = await api.get<
     ApiResponse<{ challenges: AdminChallenge[]; meta: PaginationMeta }>
-  >(`/challenges/admin?${params}`);
+  >(`api/v1/challenges/admin?${params}`);
 
   return res.data.data;
 }
@@ -101,7 +102,7 @@ export async function adminGetChallengesApi(
 
 export async function adminGetChallengeStatsApi(): Promise<AdminChallengeStats> {
   const res = await api.get<ApiResponse<AdminChallengeStats>>(
-    "/challenges/admin/stats",
+    "api/v1/challenges/admin/stats",
   );
   return res.data.data;
 }
@@ -111,11 +112,13 @@ export async function adminGetChallengeStatsApi(): Promise<AdminChallengeStats> 
 export async function adminCreateChallengeApi(
   data: CreateChallengeInput,
 ): Promise<AdminChallenge> {
-  const res = await api.post<ApiResponse<{ challenge: AdminChallenge }>>(
-    "/challenges/admin",
+
+  const res = await api.post<ApiResponse<AdminChallenge>>(
+    "api/v1/challenges/admin",
     data,
   );
-  return res.data.data.challenge;
+
+  return res.data.data;
 }
 
 // PATCH /challenges/admin/:id
@@ -124,17 +127,18 @@ export async function adminUpdateChallengeApi(
   id: string,
   data: UpdateChallengeInput,
 ): Promise<AdminChallenge> {
-  const res = await api.patch<ApiResponse<{ challenge: AdminChallenge }>>(
-    `/challenges/admin/${id}`,
+
+  const res = await api.patch<ApiResponse<AdminChallenge>>(
+    `api/v1/challenges/admin/${id}`,
     data,
   );
-  return res.data.data.challenge;
+  return res.data.data;
 }
 
 // DELETE /challenges/admin/:id
 
 export async function adminDeleteChallengeApi(id: string): Promise<void> {
-  await api.delete(`/challenges/admin/${id}`);
+  await api.delete(`api/v1/challenges/admin/${id}`);
 }
 
 // PATCH /challenges/admin/:id/publish
@@ -142,10 +146,11 @@ export async function adminDeleteChallengeApi(id: string): Promise<void> {
 export async function adminPublishChallengeApi(
   id: string,
 ): Promise<AdminChallenge> {
-  const res = await api.patch<ApiResponse<{ challenge: AdminChallenge }>>(
-    `/challenges/admin/${id}/publish`,
+  const res = await api.patch<ApiResponse<AdminChallenge>>(
+    `api/v1/challenges/admin/${id}/publish`,
   );
-  return res.data.data.challenge;
+
+  return res.data.data;
 }
 
 // PATCH /challenges/admin/:id/unpublish
@@ -153,10 +158,10 @@ export async function adminPublishChallengeApi(
 export async function adminUnpublishChallengeApi(
   id: string,
 ): Promise<AdminChallenge> {
-  const res = await api.patch<ApiResponse<{ challenge: AdminChallenge }>>(
-    `/challenges/admin/${id}/unpublish`,
+  const res = await api.patch<ApiResponse<AdminChallenge>>(
+    `api/v1/challenges/admin/${id}/unpublish`,
   );
-  return res.data.data.challenge;
+  return res.data.data;
 }
 
 // POST /challenges/admin/:id/hints
@@ -165,11 +170,12 @@ export async function adminAddHintApi(
   id: string,
   hint: AddHintInput,
 ): Promise<AdminChallenge> {
-  const res = await api.post<ApiResponse<{ challenge: AdminChallenge }>>(
-    `/challenges/admin/${id}/hints`,
+
+  const res = await api.post<ApiResponse<AdminChallenge>>(
+    `api/v1/challenges/admin/${id}/hints`,
     hint,
   );
-  return res.data.data.challenge;
+  return res.data.data;
 }
 
 // DELETE /challenges/admin/:id/hints/:hintIndex
@@ -178,10 +184,10 @@ export async function adminRemoveHintApi(
   id: string,
   hintIndex: number,
 ): Promise<AdminChallenge> {
-  const res = await api.delete<ApiResponse<{ challenge: AdminChallenge }>>(
-    `/challenges/admin/${id}/hints/${hintIndex}`,
+  const res = await api.delete<ApiResponse<AdminChallenge>>(
+    `api/v1/challenges/admin/${id}/hints/${hintIndex}`,
   );
-  return res.data.data.challenge;
+  return res.data.data;
 }
 
 // POST /challenges/admin/:id/attachments
@@ -195,8 +201,8 @@ export async function adminAddAttachmentApi(
   form.append("file", file);
   form.append("name", file.name);
 
-  const res = await api.post<ApiResponse<{ challenge: AdminChallenge }>>(
-    `/challenges/admin/${id}/attachments`,
+  const res = await api.post<ApiResponse<AdminChallenge>>(
+    `api/v1/challenges/admin/${id}/attachments`,
     form,
     {
       headers: { "Content-Type": "multipart/form-data" },
@@ -208,7 +214,7 @@ export async function adminAddAttachmentApi(
     },
   );
 
-  return res.data.data.challenge;
+  return res.data.data;
 }
 
 // DELETE /challenges/admin/:id/attachments/:attachmentId
@@ -217,10 +223,10 @@ export async function adminRemoveAttachmentApi(
   id: string,
   attachmentId: string,
 ): Promise<AdminChallenge> {
-  const res = await api.delete<ApiResponse<{ challenge: AdminChallenge }>>(
-    `/challenges/admin/${id}/attachments/${attachmentId}`,
+  const res = await api.delete<ApiResponse<AdminChallenge>>(
+    `api/v1/challenges/admin/${id}/attachments/${attachmentId}`,
   );
-  return res.data.data.challenge;
+  return res.data.data;
 }
 
 // GET /challenges/admin/:id/submissions
@@ -237,7 +243,9 @@ export async function adminGetChallengeSubmissionsApi(
   });
   if (isCorrect !== undefined) params.set("isCorrect", String(isCorrect));
 
-  const res = await api.get(`/challenges/admin/${id}/submissions?${params}`);
+  const res = await api.get(
+    `api/v1/challenges/admin/${id}/submissions?${params}`,
+  );
 
   return {
     submissions: res.data.data.submissions,
