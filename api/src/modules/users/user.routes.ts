@@ -1,7 +1,11 @@
 import express from "express";
-import { verifyAuth } from "../../middlewares/verifyAuth.middleware";
+import {
+  optionalAuth,
+  verifyAuth,
+} from "../../middlewares/verifyAuth.middleware";
 import {
   currentUser,
+  getUserProfile,
   updateAccountDetails,
   updateUserAvatar,
 } from "./user.controller";
@@ -14,5 +18,6 @@ userRouter.route("/update-account").patch(verifyAuth, updateAccountDetails);
 userRouter
   .route("/update-avatar")
   .patch(verifyAuth, upload.single("avatar"), updateUserAvatar);
+userRouter.route("/profile/:username").get(optionalAuth, getUserProfile);
 
 export default userRouter;
