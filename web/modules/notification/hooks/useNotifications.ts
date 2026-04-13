@@ -8,6 +8,7 @@ import {
   useOptimisticSets,
 } from "../store/notification.store";
 import {
+  AppNotification,
   GetNotificationsFilters,
   NotificationTypeValue,
 } from "../types/notification.types";
@@ -25,7 +26,7 @@ import { getSocket } from "@/shared/lib/socket";
  *
  * @param {GetNotificationsFilters} [overrideFilters] - Optional filters to
  * override the default filters.
- * @returns {{ data: { notifications: Notification[], meta: NotificationListMeta }, ...useQuery }}
+ * @returns {{ data: { notifications: AppNotification[], meta: NotificationListMeta }, ...useQuery }}
  */
 export function useNotifications(overrideFilters?: GetNotificationsFilters) {
   const queryClient = useQueryClient();
