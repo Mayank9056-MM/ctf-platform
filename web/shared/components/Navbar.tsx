@@ -329,21 +329,21 @@ function UserDropdown({
           <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-xl bg-white/[0.08] ring-1 ring-white/[0.1]">
             {user.avatar?.url ? (
               <Image
-                src={user.avatar.url}
-                alt={user.username}
+                src={user?.avatar?.url || ""}
+                alt={user?.username || "avatar"}
                 fill
                 className="object-cover"
                 sizes="40px"
               />
             ) : (
               <span className="flex h-full w-full items-center justify-center font-mono text-sm font-semibold text-slate-300">
-                {user.username.slice(0, 2).toUpperCase()}
+                {user?.username?.slice(0, 2)?.toUpperCase() || "?"}
               </span>
             )}
           </div>
           <div className="min-w-0 flex-1">
             <p className="truncate font-mono text-sm font-semibold text-white">
-              {user.username}
+              {user?.username || "anonymous"}
             </p>
             <p className="truncate text-xs text-slate-500">{user.email}</p>
             <div className="mt-1 flex items-center gap-1.5">
