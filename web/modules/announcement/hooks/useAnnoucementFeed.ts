@@ -6,7 +6,7 @@ import {
 import { getAnnouncementFeedApi } from "../api/announcement.api";
 import { announcementKeys } from "../queries/announcement.keys";
 import { AnnouncementFeedFilters } from "../types/announcement.types";
-import { useAnnouncementStore } from "../store/announcement";
+import { useAnnouncementStore } from "../store/announcement.store";
 import { useEffect, useMemo } from "react";
 import { getSocket } from "@/shared/lib/socket";
 
