@@ -58,17 +58,22 @@ export const createAnnouncementSchema = z
 
     challengeId: mongoId.optional(),
 
-    actionUrl: z
-      .string()
-      .url("actionUrl must be a valid URL")
-      .max(500, "actionUrl cannot exceed 500 characters")
-      .optional(),
+    actionUrl: z.preprocess(
+      (val) => (val === "" ? undefined : val),
+      z
+        .url("actionUrl must be a valid URL")
+        .max(500, "actionUrl cannot exceed 500 characters")
+        .optional()
+    ),
 
-    actionLabel: z
-      .string()
-      .max(60, "actionLabel cannot exceed 60 characters")
-      .trim()
-      .optional(),
+    actionLabel: z.preprocess(
+      (val) => (val === "" ? undefined : val),
+      z
+        .string()
+        .max(60, "actionLabel cannot exceed 60 characters")
+        .trim()
+        .optional()
+    ),
 
     expiresAt: isoDate("expiresAt")
       .refine((d) => d > new Date(), "expiresAt must be in the future")
@@ -110,7 +115,11 @@ export const updateAnnouncementSchema = z
 
     challengeId: mongoId.nullable().optional(),
 
-    actionUrl: z.string().url().max(500).nullable().optional(),
+    actionUrl: z
+      .url()
+      .max(500, "actionUrl cannot exceed 500 characters")
+      .nullable()
+      .optional(),
 
     actionLabel: z.string().max(60).trim().nullable().optional(),
 
