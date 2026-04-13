@@ -37,7 +37,7 @@ export type NotificationRef = {
 
 // Notification document
 
-export type Notification = {
+export type AppNotification = {
   _id: string;
   /** null = broadcast */
   recipient: string | null;
@@ -90,7 +90,7 @@ export type PaginationMeta = {
 };
 
 export type NotificationList = {
-  notifications: Notification[];
+  notifications: AppNotification[];
   meta: PaginationMeta;
 };
 

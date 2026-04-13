@@ -7,7 +7,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
  * Mark specific notifications as read, or mark all if IDs are omitted.
  * Invalidates summary (bell badge) and inbox list immediately.
  */
-export function useMarkNotificationsRead() {
+export function useMarkNotificationsAsRead() {
   const qc = useQueryClient();
 
   return useMutation({

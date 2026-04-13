@@ -1,5 +1,4 @@
 "use client";
-// dashboard/components/widgets/NotificationsWidget.tsx
 
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
@@ -28,9 +27,9 @@ import {
 import { NotificationTypeValue } from "@/modules/notification/types/notification.types";
 import { cn } from "@/lib/utils";
 import { useInboxSummary } from "@/modules/notification/hooks/useInboxSummary";
-import { useMarkNotificationsRead } from "@/modules/notification/hooks/useMarkNotificationAsRead";
 import { useDeleteNotification } from "@/modules/notification/hooks/useDeleteNotification";
 import { useClearInbox } from "@/modules/notification/hooks/useClearInbox";
+import { useMarkNotificationsAsRead } from "@/modules/notification/hooks/useMarkNotificationAsRead";
 
 // Type -> icon config
 
@@ -142,7 +141,7 @@ function NotifRow({
 
 export function NotificationsWidget() {
   const { data: summary, isLoading, isError, refetch } = useInboxSummary();
-  const { mutate: markRead } = useMarkNotificationsRead();
+  const { mutate: markRead } = useMarkNotificationsAsRead();
   const { mutate: deleteNotif } = useDeleteNotification();
   const { mutate: clearAll, isPending: isClearing } = useClearInbox();
 

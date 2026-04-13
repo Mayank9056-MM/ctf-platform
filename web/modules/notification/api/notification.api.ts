@@ -4,9 +4,9 @@ import { ApiResponse } from "@/shared/types/api.types";
 import {
   AdminDispatchPayload,
   AdminNotificationFilters,
+  AppNotification,
   GetNotificationsFilters,
   InboxSummary,
-  Notification,
   NotificationList,
   NotificationStats,
 } from "../types/notification.types";
@@ -55,8 +55,10 @@ export async function getNotificationsApi(
  */
 export async function getNotificationByIdApi(
   id: string,
-): Promise<Notification> {
-  const res = await api.get<ApiResponse<Notification>>(`/api/v1/notification/notifications/${id}`);
+): Promise<AppNotification> {
+  const res = await api.get<ApiResponse<AppNotification>>(
+    `/api/v1/notification/notifications/${id}`,
+  );
   return res.data.data;
 }
 
@@ -101,8 +103,9 @@ export async function deleteNotificationApi(id: string): Promise<void> {
  * Broadcasts are excluded.
  */
 export async function clearInboxApi(): Promise<{ cleared: number }> {
-  const res =
-    await api.delete<ApiResponse<{ cleared: number }>>("/api/v1/notification/notifications");
+  const res = await api.delete<ApiResponse<{ cleared: number }>>(
+    "/api/v1/notification/notifications",
+  );
   return res.data.data;
 }
 
@@ -115,8 +118,8 @@ export async function clearInboxApi(): Promise<{ cleared: number }> {
  */
 export async function adminDispatchNotificationApi(
   payload: AdminDispatchPayload,
-): Promise<Notification> {
-  const res = await api.post<ApiResponse<Notification>>(
+): Promise<AppNotification> {
+  const res = await api.post<ApiResponse<AppNotification>>(
     "/api/v1/notification/notifications/admin/dispatch",
     payload,
   );
@@ -154,8 +157,8 @@ export async function adminGetNotificationStatsApi(): Promise<NotificationStats>
  */
 export async function adminGetNotificationByIdApi(
   id: string,
-): Promise<Notification> {
-  const res = await api.get<ApiResponse<Notification>>(
+): Promise<AppNotification> {
+  const res = await api.get<ApiResponse<AppNotification>>(
     `/api/v1/notification/notifications/admin/${id}`,
   );
   return res.data.data;
@@ -167,8 +170,8 @@ export async function adminGetNotificationByIdApi(
  */
 export async function adminMarkNotificationReadApi(
   id: string,
-): Promise<Notification> {
-  const res = await api.patch<ApiResponse<Notification>>(
+): Promise<AppNotification> {
+  const res = await api.patch<ApiResponse<AppNotification>>(
     `/api/v1/notification/notifications/admin/${id}/read`,
   );
   return res.data.data;
