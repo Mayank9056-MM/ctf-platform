@@ -1,7 +1,11 @@
+import Submission from "../../models/submission.model";
+import Team from "../../models/team.model";
+import User from "../../models/user.model";
 import { ApiError } from "../../utils/ApiError";
 import { ApiResponse } from "../../utils/ApiResponse";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { parseBody } from "../../utils/helpers";
+import { submissionService } from "../submissions/submission.service";
 import { userService } from "./user.service";
 import { updateAccountDetailsSchema } from "./user.validate";
 
@@ -65,4 +69,55 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
     );
 });
 
-export { currentUser, updateAccountDetails, updateUserAvatar };
+const getUserProfile = asyncHandler(async (req, res) => {
+  const { username } = req.params;
+
+  if (!username) {
+    throw new ApiError(400, "Username is required");
+  }
+
+  const user = await User.findOne({ username, isDeleted: false })
+    .select("-email -password -resetPasswordToken -emailVerificationToken")
+    .lean();
+
+  if (!user) throw new ApiError(404, "User not found");
+
+  // Fetch stats from submissions
+  const stats = await submissionService.getMyStats(user._id);
+
+  // Recent solves with challenge details
+  const recentSolves = await Submission.find({
+    user: user._id,
+    isCorrect: true,
+  })
+    .populate(
+      "challenge",
+      "title slug category difficulty points currentPoints"
+    )
+    .sort({ createdAt: -1 })
+    .limit(20)
+    .lean();
+
+  // Team
+  const team = user.teamId
+    ? await Team.findById(user.teamId).select("name score").lean()
+    : null;
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        ...user,
+        stats: {
+          ...stats,
+          // solvesByCategory: buildCategoryBreakdown(recentSolves),
+        },
+        recentSolves,
+        team,
+      },
+      "Profile retrieved"
+    )
+  );
+});
+
+export { currentUser, updateAccountDetails, updateUserAvatar, getUserProfile };
