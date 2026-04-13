@@ -34,3 +34,40 @@ export const getMeApi = async (): Promise<UserProfile> => {
     throw error;
   }
 };
+
+export const getPublicProfile = async(username: string) => {
+  const res = await api.get<
+    ApiResponse<
+      UserProfile & {
+        stats: {
+          totalPoints: number;
+          rank: number;
+          solveCount: number;
+          firstBloods: number;
+          streak: number;
+          solveRate: number;
+          averageAttempts: number;
+          recentActivity: { date: string; count: number }[];
+          solvesByCategory: { category: string; count: number }[];
+        };
+        recentSolves: {
+          _id: string;
+          challenge: {
+            _id: string;
+            title: string;
+            slug: string;
+            category: string;
+            difficulty: string;
+            points: number;
+            currentPoints: number;
+          };
+          pointsAwarded: number;
+          isFirstBlood: boolean;
+          createdAt: string;
+        }[];
+        team?: { _id: string; name: string; score: number };
+      }
+    >
+  >(`/api/v1/user/profile/${username}`);
+  return res.data.data;
+}
