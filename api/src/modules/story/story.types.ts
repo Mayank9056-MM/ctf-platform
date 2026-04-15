@@ -13,7 +13,7 @@ export type CreateStoryPayload = {
   description?: string;
   difficulty?: StoryDifficulty;
   tags?: string[];
-  coverImageUrl?: string;
+  coverImageLocalPath?: string;
   accentColor?: string;
   completionXpBonus?: number;
   estimatedMinutes?: number;
@@ -35,7 +35,7 @@ export type CreateChapterPayload = {
   order: number;
   openingNarrative?: string;
   closingNarrative?: string;
-  coverImageUrl?: string;
+  coverImageLocalPath?: string;
   accentColor?: string;
   estimatedMinutes?: number;
   unlockAfterChapters?: string[];
