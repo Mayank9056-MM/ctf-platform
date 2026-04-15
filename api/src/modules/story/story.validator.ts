@@ -132,10 +132,7 @@ export const createNodeSchema = z
      * Each targetNode must exist within the same chapter.
      * Required (≥2) for type === "choice".
      */
-    choices: z
-      .array(choiceInputSchema)
-      .min(2, "Choice nodes require at least 2 options")
-      .optional(),
+    choices: z.array(choiceInputSchema).optional(),
 
     /** AND-gate prerequisites */
     unlockAfter: z.array(mongoId).optional().default([]),

@@ -12,6 +12,7 @@ import {
   adminDeleteChapter,
   adminDeleteNode,
   adminDeleteStory,
+  adminGetStory,
   adminPublishChapter,
   adminRemoveCharacter,
   adminSetStoryStatus,
@@ -33,6 +34,7 @@ const adminGuard = [verifyAuth, requireRole("admin", "superadmin")];
 
 // Admin: Story
 storyRouter.post("/admin", adminGuard, adminCreateStory);
+storyRouter.get("/admin/:id", adminGuard, adminGetStory);
 storyRouter.patch("/admin/:id", adminGuard, adminUpdateStory);
 storyRouter.patch("/admin/:id/status", adminGuard, adminSetStoryStatus);
 storyRouter.delete("/admin/:id", adminGuard, adminDeleteStory);

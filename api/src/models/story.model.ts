@@ -125,7 +125,7 @@ export interface IStoryChapter extends Document {
    * Validate the chapter's node graph for integrity.
    * Called before publish. Throws on any violation.
    */
-  validatePath(): {
+  validateGraph(): {
     valid: boolean;
     errors: string[];
   };
