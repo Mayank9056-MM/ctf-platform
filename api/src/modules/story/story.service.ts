@@ -945,6 +945,10 @@ class StoryService {
     }).lean();
 
     if (!progress) return null;
+
+    if (!progress.currentNodeId || !progress.currentChapterId) {
+      throw new ApiError(400, "Invalid progress. Please restart the story.");
+    }
     return this.buildProgressView(progress);
   }
 
@@ -960,10 +964,12 @@ class StoryService {
     return {
       storyId: progress.story.toString(),
       status: progress.status,
-      currentChapterId: progress.currentChapterId.toString(),
-      currentNodeId: progress.currentNodeId.toString(),
-      completedNodeIds: progress.completedNodes.map((n) => n.nodeId.toString()),
-      bypassedNodeIds: progress.bypassedNodeIds.map((id) => id.toString()),
+      currentChapterId: progress.currentChapterId?.toString() ?? null,
+      currentNodeId: progress.currentNodeId?.toString() ?? null,
+      completedNodeIds:
+        progress.completedNodes?.map((n) => n?.nodeId?.toString()) ?? [],
+      bypassedNodeIds:
+        progress.bypassedNodeIds?.map((id) => id?.toString()) ?? [],
       activePath: progress.activePath.map((id) => id.toString()),
       totalXpEarned: progress.totalXpEarned,
       playTimeSeconds: progress.playTimeSeconds,
@@ -1089,7 +1095,7 @@ class StoryService {
       for (const chapter of chapters) {
         const chapterDoc = await StoryChapter.findById(chapter._id);
         if (!chapterDoc) continue;
-        const result: GraphValidationResult = chapterDoc.validatePath();
+        const result: GraphValidationResult = chapterDoc.validateGraph();
         if (!result.valid) {
           throw new ApiError(
             400,
@@ -1233,7 +1239,7 @@ class StoryService {
     });
     if (!chapter) throw new ApiError(404, "Chapter not found");
 
-    const validation = chapter.validatePath();
+    const validation = chapter.validateGraph();
     if (!validation.valid) {
       throw new ApiError(
         400,
@@ -1488,7 +1494,18 @@ class StoryService {
     });
     if (!chapter) throw new ApiError(404, "Chapter not found");
 
-    return chapter.validatePath();
+    return chapter.validateGraph();
+  }
+
+  /**
+   * Retrieves a story by its ID, populated with author information.
+   * Throws a 404 error if the story is not found.
+   * @param {string} storyId - The ID of the story to retrieve.
+   * @returns {Promise<IStory>} - A promise that resolves to the retrieved story.
+   * @throws {ApiError} - If the story is not found.
+   */
+  async getStoryAdmin(storyId: string) {
+    return this.getStoryDetail(storyId, undefined, true);
   }
 }
 
