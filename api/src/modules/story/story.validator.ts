@@ -16,7 +16,6 @@ export const createStorySchema = z.object({
     .max(15)
     .optional()
     .default([]),
-  coverImageUrl: z.url().optional(),
   accentColor: hexColor,
   completionXpBonus: z.number().int().min(0).optional().default(0),
   estimatedMinutes: z.number().int().min(1).optional(),
@@ -31,7 +30,6 @@ export const updateStorySchema = z
       .enum(["beginner", "easy", "medium", "hard", "insane"])
       .optional(),
     tags: z.array(z.string().max(30).toLowerCase().trim()).max(15).optional(),
-    coverImageUrl: z.url().nullable().optional(),
     accentColor: hexColor,
     completionXpBonus: z.number().int().min(0).optional(),
     estimatedMinutes: z.number().int().min(1).nullable().optional(),
@@ -56,7 +54,6 @@ export const addCharacterSchema = z.object({
     .regex(/^[a-z0-9_-]+$/, "Must be lowercase alphanumeric")
     .trim(),
   name: z.string().min(1).max(80).trim(),
-  avatarUrl: z.url().optional(),
   bio: z.string().max(300).trim().optional(),
 });
 
@@ -67,7 +64,6 @@ export const createChapterSchema = z.object({
   order: z.number().int().min(1),
   openingNarrative: z.string().max(5000).trim().optional(),
   closingNarrative: z.string().max(5000).trim().optional(),
-  coverImageUrl: z.url().optional(),
   accentColor: hexColor,
   estimatedMinutes: z.number().int().min(1).optional(),
   unlockAfterChapters: z.array(mongoId).optional().default([]),
@@ -79,7 +75,6 @@ export const updateChapterSchema = z
     order: z.number().int().min(1).optional(),
     openingNarrative: z.string().max(5000).trim().nullable().optional(),
     closingNarrative: z.string().max(5000).trim().nullable().optional(),
-    coverImageUrl: z.url().nullable().optional(),
     accentColor: hexColor,
     estimatedMinutes: z.number().int().min(1).nullable().optional(),
     unlockAfterChapters: z.array(mongoId).optional(),
