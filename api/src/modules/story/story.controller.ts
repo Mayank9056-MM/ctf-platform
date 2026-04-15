@@ -485,6 +485,15 @@ const adminDeleteNode = asyncHandler(async (req, res) => {
   return res.status(200).json(new ApiResponse(200, chapter, "Node deleted"));
 });
 
+const adminGetStory = asyncHandler(async (req, res) => {
+  const id = req.params.id as string;
+  if (!id) throw new ApiError(400, "Missing id");
+
+  const story = await storyService.getStoryAdmin(id);
+
+  return res.status(200).json(new ApiResponse(200, story, "Story retrieved"));
+});
+
 export {
   getStories,
   getStoryDetail,
@@ -507,4 +516,5 @@ export {
   adminCreateNode,
   adminUpdateNode,
   adminDeleteNode,
+  adminGetStory,
 };
