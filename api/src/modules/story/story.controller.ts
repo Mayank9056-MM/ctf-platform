@@ -16,8 +16,9 @@ import {
 import { ApiError } from "../../utils/ApiError";
 import { ApiResponse } from "../../utils/ApiResponse";
 import { storyService } from "./story.service";
-import Story from "../../models/story.model";
+import Story, { IStoryCharacter } from "../../models/story.model";
 import { parseBody } from "../../utils/helpers";
+import { uploadOnCloudinary } from "../../utils/cloudinary";
 
 // Helpers
 
@@ -215,9 +216,12 @@ const getLeaderboard = asyncHandler(async (req, res) => {
 const adminCreateStory = asyncHandler(async (req, res) => {
   const data = parseBody(createStorySchema, req.body);
 
+  const coverImageLocalPath = req.file?.path;
+
   const story = await storyService.createStory({
     ...data,
     authorId: req.user!._id,
+    coverImageLocalPath,
   });
 
   if (!story) {
@@ -236,10 +240,13 @@ const adminUpdateStory = asyncHandler(async (req, res) => {
 
   const data = parseBody(updateStorySchema, req.body);
 
+  const coverImageLocalPath = req.file?.path;
+
   const story = await storyService.updateStory({
     storyId: id,
     requesterId: req.user!._id,
     ...data,
+    coverImageLocalPath,
   } as Parameters<typeof storyService.updateStory>[0]);
 
   if (!story) {
@@ -293,10 +300,38 @@ const adminAddCharacter = asyncHandler(async (req, res) => {
 
   if (!story) throw new ApiError(400, "Story not found");
 
+  const avatarLocalPath = req.file?.path;
+
+  let avatarUrl: string | undefined;
+  let publicId: string | undefined;
+
+  if (avatarLocalPath) {
+    try {
+      const res = await uploadOnCloudinary(avatarLocalPath);
+
+      if (!res) {
+        throw new ApiError(500, "Something went wrong while uploading avatar");
+      }
+
+      avatarUrl = res.secure_url;
+      publicId = res.public_id;
+    } catch (error) {
+      console.error(error, "Error uploading avatar in characters");
+      throw new ApiError(500, "Something went wrong while uploading avatar");
+    }
+  }
+
   if (story.characters.some((c) => c.id === data.id)) {
     throw new ApiError(409, `Character with id "${data.id}" already exists`);
   }
-  story.characters.push(data);
+
+  const characterPayload: IStoryCharacter = { ...data };
+
+  if (avatarUrl && publicId) {
+    characterPayload.avatar = { url: avatarUrl, publicId };
+  }
+
+  story.characters.push(characterPayload);
 
   await story.save({ validateBeforeSave: false });
 
@@ -334,10 +369,13 @@ const adminCreateChapter = asyncHandler(async (req, res) => {
 
   const data = parseBody(createChapterSchema, req.body);
 
+  const coverImageLocalPath = req.file?.path;
+
   const chapter = await storyService.createChapter({
     ...data,
     storyId: id,
     requesterId: req.user!._id,
+    coverImageLocalPath,
   });
 
   if (!chapter) {
@@ -354,15 +392,16 @@ const adminUpdateChapter = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Missing id or chapterId");
   }
 
-  const parsed = updateChapterSchema.safeParse(req.body);
+  const data = parseBody(updateChapterSchema, req.body);
 
-  const data = parsed.data;
+  const coverImageLocalPath = req.file?.path;
 
   const chapter = await storyService.updateChapter({
     ...data,
     chapterId: chapterId,
     storyId: id,
     requesterId: req.user!._id,
+    coverImageLocalPath,
   } as Parameters<typeof storyService.updateChapter>[0]);
 
   if (!chapter) {
