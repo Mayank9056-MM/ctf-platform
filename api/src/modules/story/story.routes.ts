@@ -28,17 +28,33 @@ import {
   makeChoice,
   startStory,
 } from "./story.controller";
+import { upload } from "../../middlewares/avatarUpload.middleware";
 
 const storyRouter = express.Router();
 const adminGuard = [verifyAuth, requireRole("admin", "superadmin")];
 
 // Admin: Story
-storyRouter.post("/admin", adminGuard, adminCreateStory);
+storyRouter.post(
+  "/admin",
+  adminGuard,
+  upload.single("coverImage"),
+  adminCreateStory
+);
 storyRouter.get("/admin/:id", adminGuard, adminGetStory);
-storyRouter.patch("/admin/:id", adminGuard, adminUpdateStory);
+storyRouter.patch(
+  "/admin/:id",
+  adminGuard,
+  upload.single("coverImage"),
+  adminUpdateStory
+);
 storyRouter.patch("/admin/:id/status", adminGuard, adminSetStoryStatus);
 storyRouter.delete("/admin/:id", adminGuard, adminDeleteStory);
-storyRouter.post("/admin/:id/characters", adminGuard, adminAddCharacter);
+storyRouter.post(
+  "/admin/:id/characters",
+  adminGuard,
+  upload.single("avatar"),
+  adminAddCharacter
+);
 storyRouter.delete(
   "/admin/:id/characters/:characterId",
   adminGuard,
@@ -46,10 +62,16 @@ storyRouter.delete(
 );
 
 // Admin: Chapter
-storyRouter.post("/admin/:id/chapters", adminGuard, adminCreateChapter);
+storyRouter.post(
+  "/admin/:id/chapters",
+  adminGuard,
+  upload.single("coverImage"),
+  adminCreateChapter
+);
 storyRouter.patch(
   "/admin/:id/chapters/:chapterId",
   adminGuard,
+  upload.single("coverImage"),
   adminUpdateChapter
 );
 storyRouter.delete(

@@ -29,6 +29,8 @@ import UserStoryProgress, {
 import Submission from "../../models/submission.model";
 import logger from "../../utils/logger";
 import User from "../../models/user.model";
+import { uploadOnCloudinary } from "../../utils/cloudinary";
+import { publicDecrypt } from "node:crypto";
 
 function requireNode(chapter: IStoryChapter, nodeId: string): IStoryNode {
   const node = chapter.nodes.find((n) => n._id.toString() === nodeId);
@@ -129,7 +131,7 @@ class StoryService {
     const query: Record<string, unknown> = {};
     if (status) {
       query.status = status;
-    } else {
+    } else if (!userId) {
       query.status = "published";
     }
     if (difficulty) query.difficulty = difficulty;
@@ -141,17 +143,25 @@ class StoryService {
       ];
     }
 
-    const [stories, total] = await Promise.all([
+    const [stories, total, stats] = await Promise.all([
       Story.find(query)
         .select(
           "title slug tagline difficulty status tags coverImageUrl accentColor completionXpBonus completionCount estimatedMinutes publishedAt"
         )
         .populate("author", "username avatar")
-        .sort({ publishedAt: -1 })
+        .sort({ publishedAt: -1, createdAt: -1 })
         .skip((page - 1) * limit)
         .limit(limit)
         .lean(),
       Story.countDocuments(query),
+      Story.aggregate([
+        {
+          $group: {
+            _id: "$status",
+            count: { $sum: 1 },
+          },
+        },
+      ]),
     ]);
 
     let progressMap = new Map<string, string>();
@@ -175,6 +185,7 @@ class StoryService {
       total,
       page,
       limit,
+      stats,
     };
   }
 
@@ -1033,7 +1044,38 @@ class StoryService {
     if (exists)
       throw new ApiError(409, "A story with this title already exists");
 
-    return Story.create({ ...payload, author: payload.authorId });
+    let coverImageUrl: string | undefined;
+    let publicId: string | undefined;
+
+    if (payload?.coverImageLocalPath) {
+      try {
+        const res = await uploadOnCloudinary(payload.coverImageLocalPath);
+
+        if (!res) {
+          throw new ApiError(
+            500,
+            "Something went wrong while uploading cover image"
+          );
+        }
+        coverImageUrl = res.secure_url;
+        publicId = res.public_id;
+      } catch (error) {
+        console.log(error, "error while uploading cover image");
+        throw new ApiError(
+          500,
+          "Something went wrong while uploading cover image"
+        );
+      }
+    }
+
+    return Story.create({
+      ...payload,
+      author: payload.authorId,
+      coverImage: {
+        url: coverImageUrl,
+        publicId,
+      },
+    });
   }
 
   /**
@@ -1048,6 +1090,31 @@ class StoryService {
     const story = await Story.findById(storyId);
     if (!story) throw new ApiError(404, "Story not found");
 
+    let coverImageUrl: string | undefined;
+    let publicId: string | undefined;
+
+    if (rest.coverImageLocalPath) {
+      try {
+        const res = await uploadOnCloudinary(rest.coverImageLocalPath);
+
+        if (!res) {
+          throw new ApiError(
+            500,
+            "Something went wrong while uploading cover image"
+          );
+        }
+
+        coverImageUrl = res.secure_url;
+        publicId = res.public_id;
+      } catch (error) {
+        console.log(error, "error while uploading cover image");
+        throw new ApiError(
+          500,
+          "Something went wrong while uploading cover image"
+        );
+      }
+    }
+
     const escapeStringRegexp = (await import("escape-string-regexp")).default;
 
     if (rest.title && rest.title !== story.title) {
@@ -1060,7 +1127,14 @@ class StoryService {
       if (dup) throw new ApiError(409, "Story title already in use");
     }
 
-    Object.assign(story, rest);
+    Object.assign({
+      story,
+      rest,
+      coverImage: {
+        url: coverImageUrl,
+        publicId,
+      },
+    });
     await story.save();
     return story;
   }
@@ -1172,13 +1246,32 @@ class StoryService {
       );
     }
 
+    let coverImageUrl: string | undefined;
+    let publicId: string | undefined;
+
+    if (payload?.coverImageLocalPath) {
+      try {
+        const res = await uploadOnCloudinary(payload.coverImageLocalPath);
+
+        if (!res) {
+          throw new ApiError(500, "Failed to upload cover image to cloudinary");
+        }
+
+        coverImageUrl = res.secure_url;
+        publicId = res.public_id;
+      } catch (error) {
+        console.error(error, "Error uploading cover image to cloudinary");
+        throw new ApiError(500, "Failed to upload cover image to cloudinary");
+      }
+    }
+
     const chapter = await StoryChapter.create({
       story: payload.storyId,
       title: payload.title,
       order: payload.order,
       openingNarrative: payload.openingNarrative,
       closingNarrative: payload.closingNarrative,
-      coverImageUrl: payload.coverImageUrl,
+      coverImage: { url: coverImageUrl, publicId: publicId },
       accentColor: payload.accentColor,
       estimatedMinutes: payload.estimatedMinutes,
       unlockAfterChapters:
@@ -1205,6 +1298,25 @@ class StoryService {
     const chapter = await StoryChapter.findById(chapterId);
     if (!chapter) throw new ApiError(404, "Chapter not found");
 
+    let coverImageUrl: string | undefined;
+    let publicId: string | undefined;
+
+    if (rest?.coverImageLocalPath) {
+      try {
+        const res = await uploadOnCloudinary(rest.coverImageLocalPath);
+
+        if (!res) {
+          throw new ApiError(500, "Failed to upload cover image to cloudinary");
+        }
+
+        coverImageUrl = res.secure_url;
+        publicId = res.public_id;
+      } catch (error) {
+        console.error(error, "Error uploading cover image to cloudinary");
+        throw new ApiError(500, "Failed to upload cover image to cloudinary");
+      }
+    }
+
     if (rest.order !== undefined && rest.order !== chapter.order) {
       const taken = await StoryChapter.findOne({
         story: chapter.story,
@@ -1215,7 +1327,11 @@ class StoryService {
         throw new ApiError(409, `Chapter order ${rest.order} is taken`);
     }
 
-    Object.assign(chapter, rest);
+    Object.assign({
+      chapter,
+      rest,
+      coverImage: { url: coverImageUrl, publicId },
+    });
     await chapter.save();
     return chapter;
   }

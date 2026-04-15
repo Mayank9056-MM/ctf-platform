@@ -38,7 +38,10 @@ export type StoryDifficulty =
 export interface IStoryCharacter {
   id: string;
   name: string;
-  avatarUrl?: string;
+  avatar?: {
+    url: string;
+    publicId: string;
+  };
   bio?: string;
 }
 
@@ -106,7 +109,10 @@ export interface IStoryChapter extends Document {
   order: number;
   openingNarrative?: string;
   closingNarrative?: string;
-  coverImageUrl?: string;
+  coverImage?: {
+    url: string;
+    publicId: string;
+  };
   accentColor?: string;
   status: StoryStatus;
   unlockAfterChapters: Types.ObjectId[];
@@ -136,7 +142,10 @@ export interface IStory extends Document {
   slug: string;
   tagline?: string;
   description?: string;
-  coverImageUrl?: string;
+  coverImage?: {
+    url: string;
+    publicId: string;
+  };
   accentColor?: string;
   difficulty: StoryDifficulty;
   status: StoryStatus;
@@ -154,6 +163,34 @@ export interface IStory extends Document {
 
 // Schemas
 
+const coverImageSchema = new mongoose.Schema(
+  {
+    url: {
+      type: String,
+      default: "/images/default-coverImage.png",
+    },
+    publicId: {
+      type: String,
+      default: undefined,
+    },
+  },
+  { _id: false }
+);
+
+const avatarImageSchema = new mongoose.Schema(
+  {
+    url: {
+      type: String,
+      default: "/images/default-avatar.png",
+    },
+    publicId: {
+      type: String,
+      default: undefined,
+    },
+  },
+  { _id: false }
+);
+
 const storyCharacterSchema = new mongoose.Schema<IStoryCharacter>(
   {
     id: {
@@ -168,10 +205,7 @@ const storyCharacterSchema = new mongoose.Schema<IStoryCharacter>(
       trim: true,
       maxlength: [80, "Character name cannot exceed 80 characters"],
     },
-    avatarUrl: {
-      type: String,
-      default: null,
-    },
+    avatar: avatarImageSchema,
     bio: {
       type: String,
       trim: true,
@@ -335,10 +369,7 @@ const storyChapterSchema = new mongoose.Schema<IStoryChapter>(
       ],
       default: null,
     },
-    coverImageUrl: {
-      type: String,
-      default: null,
-    },
+    coverImage: coverImageSchema,
     accentColor: {
       type: String,
       match: [/^#[0-9a-fA-F]{6}$/, "Must be a valid hex colour"],
@@ -398,10 +429,7 @@ const storySchema = new mongoose.Schema<IStory>(
       maxlength: [180, "Tagline cannot exceed 180 characters"],
       default: null,
     },
-    coverImageUrl: {
-      type: String,
-      default: null,
-    },
+    coverImage: coverImageSchema,
     accentColor: {
       type: String,
       match: [/^#[0-9a-fA-F]{6}$/, "Must be a valid hex colour"],
