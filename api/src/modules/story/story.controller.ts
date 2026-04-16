@@ -367,7 +367,13 @@ const adminCreateChapter = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Missing id");
   }
 
-  const data = parseBody(createChapterSchema, req.body);
+  const data = parseBody(createChapterSchema, {
+    ...req.body,
+    order: Number(req.body.order),
+    estimatedMinutes: req.body.estimatedMinutes
+      ? Number(req.body.estimatedMinutes)
+      : undefined,
+  });
 
   const coverImageLocalPath = req.file?.path;
 
