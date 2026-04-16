@@ -1,10 +1,13 @@
 import rateLimit from "express-rate-limit";
 import { RATE_LIMIT } from "../utils/constants";
 import logger from "../utils/logger";
+import { config } from "../config/config";
 
 export const rateLimiter = rateLimit({
-  windowMs: RATE_LIMIT.windowMs,
-  max: RATE_LIMIT.max,
+  windowMs:
+    config.NODE_ENV === "development" ? 30 * 60 * 1000 : RATE_LIMIT.windowMs,
+  max: config.NODE_ENV === "development" ? 1000 : RATE_LIMIT.max,
+  skip: (req) => req.method === "OPTIONS",
   message: {
     success: false,
     message: "Too many requests from this IP, please try again later.",
