@@ -30,7 +30,6 @@ function buildParams(obj: Record<string, unknown>): URLSearchParams {
 
 export async function getDashboardStatsApi(): Promise<PlatformStats> {
   const res = await api.get<ApiResponse<PlatformStats>>("api/v1/admin/dashboard");
-  console.log(res, "dashboard stats");
   return res.data.data;
 }
 

@@ -39,5 +39,6 @@ export function useStoryProgress(storyId: string, enabled = true) {
     queryFn: () => getStoryProgressApi(storyId),
     enabled: enabled && !!storyId,
     staleTime: STALE.PROGRESS,
+    retry: false,
   });
 }

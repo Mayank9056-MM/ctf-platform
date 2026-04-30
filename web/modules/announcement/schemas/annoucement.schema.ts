@@ -1,16 +1,11 @@
 // modules/announcements/validations/announcement.schema.ts
+import { error } from "console";
 import { z } from "zod";
 
-export const SEVERITIES = ["info", "success", "warning", "critical"] as const;
-
-export const AUDIENCES = ["all", "teams", "solo", "specific"] as const;
+const SEVERITIES = ["info", "success", "warning", "critical"] as const;
+const AUDIENCES = ["all", "teams", "solo", "specific"] as const;
 
 const mongoId = z.string().regex(/^[a-f\d]{24}$/i, "Must be a valid ObjectId");
-
-const isoDate = (label: string) =>
-  z.iso
-    .datetime({ message: `${label} must be a valid ISO 8601 datetime` })
-    .refine((v) => new Date(v) > new Date(), `${label} must be in the future`);
 
 const paginationBase = {
   page: z
@@ -44,23 +39,17 @@ export const createAnnouncementSchema = z
       .max(5000, "Body must be under 5,000 characters")
       .trim(),
 
-    severity: z
-      .enum(SEVERITIES, {
-        error: () => ({
-          message: `Severity must be one of: ${SEVERITIES.join(", ")}`,
-        }),
-      })
-      .optional()
-      .default("info"),
+    severity: z.enum(SEVERITIES, {
+      error: () => ({
+        message: `Severity must be one of: ${SEVERITIES.join(", ")}`,
+      }),
+    }),
 
-    audience: z
-      .enum(AUDIENCES, {
-        error: () => ({
-          message: `Audience must be one of: ${AUDIENCES.join(", ")}`,
-        }),
-      })
-      .optional()
-      .default("all"),
+    audience: z.enum(AUDIENCES, {
+      error: () => ({
+        message: `Audience must be one of: ${AUDIENCES.join(", ")}`,
+      }),
+    }),
 
     targetUsers: z
       .array(mongoId, {
@@ -72,7 +61,6 @@ export const createAnnouncementSchema = z
     challengeId: mongoId.optional(),
 
     actionUrl: z
-      .string()
       .url("actionUrl must be a valid URL")
       .max(500, "actionUrl cannot exceed 500 characters")
       .optional(),
@@ -83,9 +71,15 @@ export const createAnnouncementSchema = z
       .trim()
       .optional(),
 
-    expiresAt: isoDate("expiresAt").optional(),
+    expiresAt: z.iso
+      .datetime({ error: "expiresAt must be a valid ISO 8601 datetime" })
+      .refine(
+        (s) => new Date(s) > new Date(),
+        "expiresAt must be in the future",
+      )
+      .optional(),
 
-    publishImmediately: z.boolean().optional().default(false),
+    publishImmediately: z.boolean(),
   })
   // Rule 1: "specific" audience must carry targetUsers
   .refine(
@@ -114,20 +108,41 @@ export type CreateAnnouncementFormData = z.infer<
 export const updateAnnouncementSchema = z
   .object({
     title: z.string().min(3).max(150).trim().optional(),
+
     body: z.string().min(10).max(5000).trim().optional(),
+
     severity: z.enum(SEVERITIES).optional(),
+
     audience: z.enum(AUDIENCES).optional(),
-    targetUsers: z.array(mongoId).min(1).optional(),
+
+    targetUsers: z.array(mongoId).optional(),
+
     challengeId: mongoId.nullable().optional(),
-    actionUrl: z.string().url().max(500).nullable().optional(),
+
+    actionUrl: z
+      .url()
+      .max(500, "actionUrl cannot exceed 500 characters")
+      .nullable()
+      .optional(),
+
     actionLabel: z.string().max(60).trim().nullable().optional(),
-    expiresAt: isoDate("expiresAt").nullable().optional(),
+
+    expiresAt: z.iso
+      .datetime({ error: "expiresAt must be a valid ISO 8601 datetime" })
+      .refine(
+        (s) => new Date(s) > new Date(),
+        "expiresAt must be in the future",
+      )
+      .optional(),
   })
-  .refine((d) => Object.values(d).some((v) => v !== undefined), {
+  .refine((d) => Object.keys(d).length > 0, {
     message: "At least one field must be provided",
   })
   .refine(
-    (d) => d.audience !== "specific" || (d.targetUsers?.length ?? 0) > 0,
+    (d) =>
+      d.audience === undefined ||
+      d.audience !== "specific" ||
+      (d.targetUsers?.length ?? 0) > 0,
     {
       message: "targetUsers is required when audience is 'specific'",
       path: ["targetUsers"],

@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "motion/react";
-import { ConfirmModal } from "../../../shared/components/ui/ConfirmModal";
 import { fmt } from "@/shared/utils/fmt";
 import { timeAgo } from "@/shared/utils/time";
 import { FilterBar } from "../components/users/FilterBar";
@@ -27,6 +26,7 @@ import { UserDetailPanel } from "../components/users/UserDetailPanel";
 import { BanModal } from "../components/users/BanModal";
 import { ChangeRoleModal } from "../components/users/ChangeRoleModal";
 import { EditUserModal } from "../components/users/EditUserModal";
+import { ConfirmModal } from "@/shared/components/ConfirmModal";
 
 type SortHeaderProps = {
   field: AdminUserFilters["sortBy"];
