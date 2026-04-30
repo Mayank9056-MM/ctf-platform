@@ -1,12 +1,6 @@
 // Enums
 
-export const STORY_DIFFICULTIES = [
-  "beginner",
-  "easy",
-  "medium",
-  "hard",
-  "insane",
-] as const;
+export const STORY_DIFFICULTIES = ["easy", "medium", "hard", "insane"] as const;
 
 export const STORY_STATUSES = ["draft", "published", "archived"] as const;
 
@@ -18,8 +12,8 @@ export const NODE_TYPES = [
 ] as const;
 
 export type StoryDifficulty = (typeof STORY_DIFFICULTIES)[number];
-export type StoryStatus     = (typeof STORY_STATUSES)[number];
-export type StoryNodeType   = (typeof NODE_TYPES)[number];
+export type StoryStatus = (typeof STORY_STATUSES)[number];
+export type StoryNodeType = (typeof NODE_TYPES)[number];
 
 // Sub-documents
 
@@ -42,7 +36,7 @@ export type NodeChoice = {
   targetNode: string;
 };
 
-// Node 
+// Node
 
 export type StoryNode = {
   _id: string;
@@ -201,7 +195,7 @@ export type StoryListFilters = {
   limit?: number;
 };
 
-// Zustand UI state 
+// Zustand UI state
 
 export type StoryUIState = {
   // Admin story list

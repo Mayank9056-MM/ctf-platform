@@ -30,10 +30,10 @@ function buildParams(obj: Record<string, unknown>): URLSearchParams {
  * @throws {ApiError} If the team is not found
  */
 export async function getTeamByIdApi(id: string): Promise<Team> {
-  const res = await api.get<ApiResponse<{ team: Team }>>(
+  const res = await api.get<ApiResponse<Team>>(
     `/api/v1/team/teams/get-team/${id}`,
   );
-  return res.data.data.team;
+  return res.data.data;
 }
 
 // GET /teams/search
@@ -96,11 +96,11 @@ export async function getMyTeamApi(): Promise<Team | null> {
  * @throws {ApiError} If the request fails
  */
 export async function createTeamApi(payload: CreateTeamPayload): Promise<Team> {
-  const res = await api.post<ApiResponse<{ team: Team }>>(
+  const res = await api.post<ApiResponse<Team>>(
     "/api/v1/team/",
     payload,
   );
-  return res.data.data.team;
+  return res.data.data;
 }
 
 // PATCH /teams/:id
@@ -121,11 +121,11 @@ export async function updateTeamApi(
   teamId: string,
   payload: UpdateTeamPayload,
 ): Promise<Team> {
-  const res = await api.patch<ApiResponse<{ team: Team }>>(
+  const res = await api.patch<ApiResponse<Team>>(
     `/api/v1/team/${teamId}`,
     payload,
   );
-  return res.data.data.team;
+  return res.data.data;
 }
 
 // POST /teams/join
@@ -139,10 +139,10 @@ export async function updateTeamApi(
  * @throws {ApiError} If the request fails
  */
 export async function joinTeamByCodeApi(code: string): Promise<Team> {
-  const res = await api.post<ApiResponse<{ team: Team }>>("/api/v1/team/join", {
+  const res = await api.post<ApiResponse<Team>>("/api/v1/team/join", {
     code: code.toUpperCase().trim(),
   });
-  return res.data.data.team;
+  return res.data.data;
 }
 
 // POST /teams/leave
@@ -199,10 +199,10 @@ export async function inviteUserApi(
  * @throws {ApiError} If the request fails
  */
 export async function acceptInviteApi(teamId: string): Promise<Team> {
-  const res = await api.post<ApiResponse<{ team: Team }>>(
+  const res = await api.post<ApiResponse<Team>>(
     `/api/v1/team/${teamId}/accept-invite`,
   );
-  return res.data.data.team;
+  return res.data.data;
 }
 
 // POST /teams/:id/decline-invite

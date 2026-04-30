@@ -11,7 +11,7 @@ const hexColor = z
   .string()
   .regex(/^#[0-9a-fA-F]{6}$/, "Must be a valid hex colour e.g. #ff4500")
   .optional();
-const url = z.string().url("Must be a valid URL").optional();
+const url = z.url("Must be a valid URL").optional();
 
 // Story
 
@@ -32,6 +32,7 @@ export const createStorySchema = z.object({
 });
 
 export type CreateStoryFormData = z.infer<typeof createStorySchema>;
+export type CreateStoryInput = z.input<typeof createStorySchema>;
 
 export const updateStorySchema = z
   .object({
@@ -67,7 +68,7 @@ export const addCharacterSchema = z.object({
     .regex(/^[a-z0-9_-]+$/, "Must be lowercase alphanumeric")
     .trim(),
   name: z.string().min(1).max(80).trim(),
-  avatarUrl: url,
+  avatarUrl: z.url("Must be a valid URL").optional(),
   bio: z.string().max(300).trim().optional(),
 });
 
@@ -110,7 +111,7 @@ export type UpdateChapterFormData = z.infer<typeof updateChapterSchema>;
 const choiceInputSchema = z.object({
   label: z.string().min(1).max(120).trim(),
   description: z.string().max(300).trim().optional(),
-  targetNode: mongoId,
+  targetNode: mongoId.optional(),
 });
 
 export const createNodeSchema = z
@@ -127,10 +128,7 @@ export const createNodeSchema = z
     postNarrative: z.string().max(5000).trim().optional(),
     characterId: z.string().max(30).trim().optional(),
     nextNode: mongoId.optional(),
-    choices: z
-      .array(choiceInputSchema)
-      .min(2, "Choice nodes require at least 2 options")
-      .optional(),
+    choices: z.array(choiceInputSchema).optional(),
     unlockAfter: z.array(mongoId).optional().default([]),
     isOptional: z.boolean().optional().default(false),
     xpBonus: z.number().int().min(0).optional().default(0),
@@ -148,14 +146,22 @@ export const createNodeSchema = z
     message: "Choice nodes must not have nextNode — use choices[].targetNode",
     path: ["nextNode"],
   })
-  .refine((d) => d.type === "challenge" || !!d.content || !!d.preNarrative, {
-    message: "Non-challenge nodes must have content or preNarrative",
-    path: ["content"],
-  })
+  .refine(
+    (d) =>
+      d.type === "challenge" ||
+      d.type === "choice" ||
+      !!d.content ||
+      !!d.preNarrative,
+    {
+      message: "Non-challenge nodes must have content or preNarrative",
+      path: ["content"],
+    },
+  )
   .refine(
     (d) => {
       if (d.type !== "choice") return true;
-      const labels = d.choices!.map((c) => c.label);
+      if (!d.choices || d.choices.length === 0) return true;
+      const labels = d.choices.map((c) => c.label);
       return new Set(labels).size === labels.length;
     },
     {

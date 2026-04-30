@@ -214,7 +214,13 @@ const getLeaderboard = asyncHandler(async (req, res) => {
 // Admin: Story Controllers
 
 const adminCreateStory = asyncHandler(async (req, res) => {
-  const data = parseBody(createStorySchema, req.body);
+  const data = parseBody(createStorySchema, {
+    ...req.body,
+    completionXpBonus: Number(req.body.completionXpBonus || 0),
+    estimatedMinutes: req.body.estimatedMinutes
+      ? Number(req.body.estimatedMinutes)
+      : undefined,
+  });
 
   const coverImageLocalPath = req.file?.path;
 

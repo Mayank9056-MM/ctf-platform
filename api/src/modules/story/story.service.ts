@@ -1444,7 +1444,7 @@ class StoryService {
     }
 
     for (const choice of payload.choices ?? []) {
-      if (!nodeIds.has(choice.targetNode)) {
+      if (choice.targetNode && !nodeIds.has(choice.targetNode)) {
         throw new ApiError(
           400,
           `Choice "${choice.label}" targets unknown node ${choice.targetNode}`
@@ -1543,7 +1543,7 @@ class StoryService {
     }
 
     for (const choice of rest.choices ?? []) {
-      if (!nodeIds.has(choice.targetNode)) {
+      if (choice.targetNode && !nodeIds.has(choice.targetNode)) {
         throw new ApiError(
           400,
           `Choice "${choice.label}" targets unknown node ${choice.targetNode}`

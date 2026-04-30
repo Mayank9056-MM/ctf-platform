@@ -25,4 +25,5 @@ export const storyKeys = {
     validate: (storyId: string, chapterId: string) =>
       [...base, "admin", "validate", storyId, chapterId] as const,
   },
+  adminDetail: (id: string) => ["stories", "admin", "detail", id] as const,
 } as const;
