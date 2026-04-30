@@ -89,7 +89,7 @@ const choiceInputSchema = z.object({
   label: z.string().min(1).max(120).trim(),
   description: z.string().max(300).trim().optional(),
   /** Must be an existing node _id within the same chapter */
-  targetNode: mongoId,
+  targetNode: mongoId.optional(),
 });
 
 export const createNodeSchema = z
@@ -148,10 +148,17 @@ export const createNodeSchema = z
     message: "Choice nodes must not have nextNode — use choices[].targetNode",
     path: ["nextNode"],
   })
-  .refine((d) => d.type === "challenge" || !!d.content || !!d.preNarrative, {
-    message: "Non-challenge nodes must have content or preNarrative",
-    path: ["content"],
-  })
+  .refine(
+    (d) =>
+      d.type === "challenge" ||
+      d.type === "choice" ||
+      !!d.content ||
+      !!d.preNarrative,
+    {
+      message: "Non-challenge nodes must have content or preNarrative",
+      path: ["content"],
+    }
+  )
   .refine(
     (d) => {
       if (d.type !== "choice") return true;
