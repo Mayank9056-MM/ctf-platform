@@ -769,10 +769,10 @@ storyChapterSchema.methods.validateGraph = function (this: IStoryChapter): {
 
 // Models
 
-export const StoryNode = mongoose.model<IStoryNode>(
-  "StoryNode",
-  storyNodeSchema
-);
+// export const StoryNode = mongoose.model<IStoryNode>(
+//   "StoryNode",
+//   storyNodeSchema // TODO: future task make this use
+// );
 export const StoryChapter = mongoose.model<IStoryChapter>(
   "StoryChapter",
   storyChapterSchema
