@@ -48,7 +48,6 @@ const envSchema = z.object({
   AWS_ACCESS_KEY_ID: z.string().min(16),
   AWS_SECRET_ACCESS_KEY: z.string().min(32),
   AWS_S3_BUCKET_NAME: z.string().min(3),
-  AWS_S3_PUBLIC_DOMAIN: z.url().optional(),
   AWS_S3_ENDPOINT: z.url().optional(),
 });
 
