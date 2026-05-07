@@ -1,6 +1,6 @@
 import { createClient, type RedisClientType } from "redis";
 import { config } from "../config/config";
-import logger from "../utils/logger";
+import logger from "./logger";
 
 // Singleton
 

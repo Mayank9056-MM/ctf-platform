@@ -14,7 +14,7 @@ import { getRedis } from "../../lib/redis";
 import { redisClient } from "../../config/redis";
 import { config } from "../../config/config";
 import { getIO } from "../../socket/socket.gateway";
-import logger from "../../utils/logger";
+import logger from "../../lib/logger";
 
 // Constants
 

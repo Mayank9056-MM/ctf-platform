@@ -3,8 +3,8 @@ import { Server as SocketServer } from "socket.io";
 import { createAdapter } from "@socket.io/redis-adapter";
 import { createClient } from "redis";
 import { config } from "../config/config";
-import logger from "../utils/logger";
 import { verifySocketAuth } from "./socket.middleware";
+import logger from "../lib/logger";
 
 // Types that mirror the frontend types
 

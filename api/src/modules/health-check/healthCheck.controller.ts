@@ -1,9 +1,7 @@
-// GET /health/ping
-
+import logger from "../../lib/logger";
 import { ApiError } from "../../utils/ApiError";
 import { ApiResponse } from "../../utils/ApiResponse";
 import { asyncHandler } from "../../utils/asyncHandler";
-import logger from "../../utils/logger";
 import {
   healthService,
   VALID_SERVICES,

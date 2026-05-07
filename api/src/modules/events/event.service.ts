@@ -1,5 +1,4 @@
 import AuditLog, { IAuditLogModel } from "../../models/auditlog.model";
-import logger from "../../utils/logger";
 import {
   AdminEventFilters,
   CreateEventPayload,
@@ -25,6 +24,7 @@ import Team from "../../models/team.model";
 import Challenge from "../../models/challenge.model";
 import { leaderboardService } from "../leaderboard/leaderboard.service";
 import { socketEmit } from "../../socket/socket.emitters";
+import logger from "../../lib/logger";
 
 /**
  * Write an audit log entry.
@@ -40,7 +40,7 @@ const audit = async (
   try {
     await (AuditLog as unknown as IAuditLogModel).record(entry);
   } catch (err) {
-    logger.error("[EventService] Audit log write failed", err);
+    logger.error("[EventService] Audit log write failed", { err });
   }
 };
 

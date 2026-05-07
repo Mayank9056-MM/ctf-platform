@@ -1,7 +1,7 @@
 import { OAuth2Client, TokenPayload } from "google-auth-library";
 import { config } from "../../config/config";
-import logger from "../../utils/logger";
 import { ApiError } from "../../utils/ApiError";
+import logger from "../../lib/logger";
 
 const client = new OAuth2Client(config.GOOGLE_CLIENT_ID);
 
@@ -52,7 +52,7 @@ export const verifyGoogleToken = async (
       providerId: payload.sub,
     };
   } catch (error) {
-    logger.error("Error verifying Google token:", error);
+    logger.error("Error verifying Google token:", { error });
     throw new ApiError(401, "Invalid or expired Google token");
   }
 };

@@ -10,11 +10,11 @@ import Leaderboard, {
   LeaderboardScope,
 } from "../../models/leaderboard.model";
 import { ApiError } from "../../utils/ApiError";
-import logger from "../../utils/logger";
 import User from "../../models/user.model";
 import Submission from "../../models/submission.model";
 import Team from "../../models/team.model";
 import Event from "../../models/event.model";
+import logger from "../../lib/logger";
 
 /** How many entries to store in the embedded snapshot */
 const SNAPSHOT_TOP_N = 500;

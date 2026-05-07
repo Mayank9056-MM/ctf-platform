@@ -1,3 +1,4 @@
+import logger from "../lib/logger";
 import {
   getIO,
   GLOBAL_ROOM,
@@ -5,7 +6,6 @@ import {
   teamRoom,
   eventRoom,
 } from "./socket.gateway";
-import logger from "../utils/logger";
 
 // Safe wrapper
 
@@ -15,7 +15,7 @@ function safeEmit(fn: () => void): void {
   } catch (err) {
     logger.warn(
       "[SocketEmit] Emit failed — socket may not be initialised yet:",
-      err
+      { err }
     );
   }
 }

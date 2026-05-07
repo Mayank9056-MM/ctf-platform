@@ -1,110 +1,175 @@
+// src/db/index.ts
+
 import mongoose from "mongoose";
 import { DB_NAME, MAX_RETRIES, RETRY_INTERVAL } from "../utils/constants";
 import { config } from "../config/config";
-import logger from "../utils/logger";
+import { mongoLogger } from "../lib/logger";
+
+// Types
+
+export interface DBStatus {
+  isConnected: boolean;
+  readyState: number;
+  host: string | undefined;
+  name: string | undefined;
+}
+
+// Mongoose Debug Integration
+
+function mongooseDebugLogger(
+  collectionName: string,
+  method: string,
+  query: unknown,
+  doc: unknown
+): void {
+  mongoLogger.trace("Mongoose query", {
+    collectionName,
+    method,
+    queryShape:
+      query && typeof query === "object"
+        ? Object.keys(query as object)
+        : undefined,
+    hasDoc: doc != null,
+  });
+}
+
+// DatabaseConnection
 
 class DatabaseConnection {
-  private retryCount: number;
-  private isConnected: boolean;
+  private retryCount: number = 0;
+  private isConnected: boolean = false;
 
   constructor() {
-    this.retryCount = 0;
-    this.isConnected = false;
-
-    // configure mongoose settings
     mongoose.set("strictQuery", true);
 
+    mongoose.set("debug", mongooseDebugLogger);
+
+    this.registerMongooseEvents();
+  }
+
+  // Event Registration
+
+  private registerMongooseEvents(): void {
     mongoose.connection.on("connected", () => {
-      logger.info("\nMONGODB CONNECTED SUCCESSFULLY\n");
       this.isConnected = true;
+      mongoLogger.info("MongoDB connected", {
+        host: mongoose.connection.host,
+        db: mongoose.connection.name,
+        readyState: mongoose.connection.readyState,
+      });
     });
 
-    mongoose.connection.on("error", () => {
-      logger.info("MONGODB CONNECTION ERROR");
+    mongoose.connection.on("error", (err: Error) => {
       this.isConnected = false;
+      mongoLogger.error("MongoDB connection error", {
+        err,
+        host: mongoose.connection.host,
+        readyState: mongoose.connection.readyState,
+      });
     });
 
     mongoose.connection.on("disconnected", () => {
-      logger.info("MONGODB DISCONNECTED");
       this.isConnected = false;
-      // this.handleDisconnection();
+      mongoLogger.warn("MongoDB disconnected", {
+        host: mongoose.connection.host,
+        readyState: mongoose.connection.readyState,
+      });
     });
 
-    process.on("SIGTERM", this.handleAppTermination.bind(this));
+    mongoose.connection.on("reconnected", () => {
+      this.isConnected = true;
+      mongoLogger.info("MongoDB reconnected", {
+        host: mongoose.connection.host,
+        db: mongoose.connection.name,
+      });
+    });
+
+    // Fires when the connection pool is exhausted — useful for capacity planning
+    mongoose.connection.on("fullsetup", () => {
+      mongoLogger.debug("MongoDB replica set fully connected");
+    });
   }
 
-  async connectDB() {
+  // Connect
+
+  async connectDB(): Promise<void> {
     try {
       if (!config.MONGODB_URI) {
-        throw new Error("MONGO db URI is not found in evn variables");
+        throw new Error("MONGODB_URI is not set in environment variables");
       }
 
-      const connectionOptions = {
-        maxPoolSize: 10, // how many threads connect to database free plan it's 10
+      const connectionOptions: mongoose.ConnectOptions = {
+        maxPoolSize: 10,
         serverSelectionTimeoutMS: 5000,
         socketTimeoutMS: 45000,
-        family: 4, // use IPv4
+        family: 4,
+        dbName: DB_NAME,
       };
 
-      if (config.NODE_ENV === "development") {
-        mongoose.set("debug", true);
-      }
+      mongoLogger.debug("Connecting to MongoDB", {
+        uri: config.MONGODB_URI.replace(/:\/\/[^@]+@/, "://<credentials>@"), // mask credentials in URI
+        db: DB_NAME,
+        maxPoolSize: connectionOptions.maxPoolSize,
+      });
 
-      await mongoose.connect(
-        `${config.MONGODB_URI}/${DB_NAME}`,
-        connectionOptions
-      );
-      this.retryCount = 0; // reset retry count on success
+      await mongoose.connect(config.MONGODB_URI, connectionOptions);
+
+      // Reset retry counter on successful connection
+      this.retryCount = 0;
     } catch (error) {
-      if (error instanceof Error) {
-        logger.error(error.message);
-      } else {
-        logger.error("Unknown error occurred");
-      }
-      await this.handleConnectionError();
+      mongoLogger.error("MongoDB connection attempt failed", {
+        err: error,
+        attempt: this.retryCount + 1,
+        maxRetries: MAX_RETRIES,
+      });
+      await this.handleConnectionError(error);
     }
   }
 
-  async handleConnectionError() {
+  // Retry Logic
+
+  private async handleConnectionError(originalError?: unknown): Promise<void> {
     if (this.retryCount < MAX_RETRIES) {
       this.retryCount++;
-      logger.info(
-        `Retrying connection... Attempt ${this.retryCount} of ${MAX_RETRIES}`
-      );
 
-      await new Promise(
-        (
-          resolve // waiting 5 sec here !
-        ) => setTimeout(resolve, RETRY_INTERVAL)
+      const MAX_BACKOFF_MS = 30_000;
+      const exponential = Math.min(
+        RETRY_INTERVAL * Math.pow(2, this.retryCount - 1),
+        MAX_BACKOFF_MS
       );
+      const jitter = Math.floor(Math.random() * 1000);
+      const delayMs = exponential + jitter;
+
+      mongoLogger.warn("Retrying MongoDB connection", {
+        attempt: this.retryCount,
+        maxRetries: MAX_RETRIES,
+        delayMs,
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
       return this.connectDB();
-    } else {
-      logger.error(
-        `Failed to connect to MONGODB after ${MAX_RETRIES} attempts`
-      );
-      process.exit(1);
     }
+
+    // All retries exhausted — this is a fatal startup failure
+    mongoLogger.fatal("MongoDB connection failed after all retries — exiting", {
+      maxRetries: MAX_RETRIES,
+      err: originalError,
+    });
+    process.exit(1);
   }
 
-  async handleDisconnection() {
+  // Manual Reconnect
+
+  async handleDisconnection(): Promise<void> {
     if (!this.isConnected) {
-      logger.info("Attempting to reconnected to mongodb...");
-      this.connectDB();
+      mongoLogger.info("Attempting manual reconnect to MongoDB");
+      await this.connectDB();
     }
   }
 
-  async handleAppTermination() {
-    try {
-      await mongoose.connection.close();
-      logger.info("MongoDB connection closed through app termination");
-      process.exit(0);
-    } catch (error) {
-      logger.error("Error during database disconnection", error);
-      process.exit(1);
-    }
-  }
+  // Status
 
-  getConnectionStatus() {
+  getConnectionStatus(): DBStatus {
     return {
       isConnected: this.isConnected,
       readyState: mongoose.connection.readyState,
@@ -114,7 +179,8 @@ class DatabaseConnection {
   }
 }
 
-// create a singleton instance
+// Singleton
+
 const dbConnection = new DatabaseConnection();
 
 export default dbConnection.connectDB.bind(dbConnection);
