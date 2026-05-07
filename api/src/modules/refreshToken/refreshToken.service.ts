@@ -11,8 +11,8 @@ import {
 import RefreshToken, {
   IRefreshTokenModel,
 } from "../../models/refreshToken.model";
-import logger from "../../utils/logger";
 import { ApiError } from "../../utils/ApiError";
+import logger from "../../lib/logger";
 
 // Constants
 

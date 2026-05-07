@@ -3,8 +3,8 @@ import { config } from "../config/config";
 import { NextFunction, Request, Response } from "express";
 import User, { IUser } from "../models/user.model";
 import { ApiError } from "../utils/ApiError";
-import logger from "../utils/logger";
 import { cacheService } from "../services/cacheService";
+import logger from "../lib/logger";
 
 export interface TokenPayload extends JwtPayload {
   _id: string;
@@ -62,13 +62,13 @@ export const verifyAuth = async (
     req.user = user as IUser;
     next();
   } catch (error) {
-    logger.error("Error in verify auth", error);
+    logger.error("Error in verify auth", { error });
     if (error instanceof jwt.TokenExpiredError) {
       next(new ApiError(401, "Access token expired"));
     } else if (error instanceof jwt.JsonWebTokenError) {
       next(new ApiError(401, "Invalid access token"));
     } else {
-      console.log(error);
+      logger.error("Unexpected error in verify auth", { error });
       next(new ApiError(401, "Invalid access token"));
     }
   }

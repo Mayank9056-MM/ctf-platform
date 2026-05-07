@@ -17,13 +17,13 @@ import {
 import User, { IUser } from "../../models/user.model";
 import { ApiError } from "../../utils/ApiError";
 import AuditLog, { IAuditLogModel } from "../../models/auditlog.model";
-import logger from "../../utils/logger";
 import Submission from "../../models/submission.model";
 import Story from "../../models/story.model";
 import UserStoryProgress from "../../models/userProgressStory.model";
 import Team from "../../models/team.model";
 import Challenge from "../../models/challenge.model";
 import { refreshTokenService } from "../refreshToken/refreshToken.service";
+import logger from "../../lib/logger";
 
 // Internal Helpers
 
@@ -55,7 +55,7 @@ const audit = async (
     await (AuditLog as unknown as IAuditLogModel).record(entry);
   } catch (err) {
     // Audit log failure must never crash the operation
-    logger.error("[AdminService] Failed to write audit log", err);
+    logger.error("[AdminService] Failed to write audit log", { err });
   }
 };
 

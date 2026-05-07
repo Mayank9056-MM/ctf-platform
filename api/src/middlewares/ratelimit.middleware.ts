@@ -1,7 +1,7 @@
 import rateLimit from "express-rate-limit";
 import { RATE_LIMIT } from "../utils/constants";
-import logger from "../utils/logger";
 import { config } from "../config/config";
+import logger from "../lib/logger";
 
 export const rateLimiter = rateLimit({
   windowMs:

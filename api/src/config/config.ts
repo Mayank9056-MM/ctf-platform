@@ -49,6 +49,13 @@ const envSchema = z.object({
   AWS_SECRET_ACCESS_KEY: z.string().min(32),
   AWS_S3_BUCKET_NAME: z.string().min(3),
   AWS_S3_ENDPOINT: z.url().optional(),
+
+  // logger
+  LOG_STDOUT_ONLY: z.string().default("false"),
+  LOG_DIR: z.string().default("./logs"),
+  LOG_LEVEL: z
+    .enum(["trace", "debug", "info", "warn", "error", "fatal"])
+    .default("info"),
 });
 
 export const config = envSchema.parse(process.env);

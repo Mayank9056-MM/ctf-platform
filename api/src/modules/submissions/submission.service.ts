@@ -5,7 +5,6 @@ import {
   MAX_FLAG_ATTEMPTS_PER_WINDOW,
   RATE_LIMIT_WINDOW_MS,
 } from "../../utils/constants";
-import logger from "../../utils/logger";
 import {
   AdminSubmissionFilters,
   ChallengeSubmissionHistoryFilters,
@@ -28,6 +27,7 @@ import { storyService } from "../story/story.service";
 import { leaderboardService } from "../leaderboard/leaderboard.service";
 import { rateLimitCache } from "../../lib/redis";
 import { socketEmit } from "../../socket/socket.emitters";
+import logger from "../../lib/logger";
 
 type solveWithRank = ISubmission & { rank: number };
 

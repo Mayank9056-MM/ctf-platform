@@ -4,7 +4,6 @@ import Challenge from "../../models/challenge.model";
 import AuditLog, { IAuditLogModel } from "../../models/auditlog.model";
 import { notificationService } from "../notification/notification.service";
 import { ApiError } from "../../utils/ApiError";
-import logger from "../../utils/logger";
 import {
   AdminAnnouncementFilters,
   AnnouncementFeedFilters,
@@ -20,6 +19,7 @@ import Announcement, {
   IAnnouncementModel,
 } from "../../models/anouncement.model";
 import { socketEmit } from "../../socket/socket.emitters";
+import logger from "../../lib/logger";
 
 // Internal Helpers
 
@@ -29,7 +29,7 @@ const audit = async (
   try {
     await (AuditLog as unknown as IAuditLogModel).record(entry);
   } catch (err) {
-    logger.error("[AnnouncementService] Audit log write failed", err);
+    logger.error("[AnnouncementService] Audit log write failed", { err });
   }
 };
 
@@ -451,7 +451,9 @@ class AnnouncementService {
     // Dispatch notification only on first publish — avoid duplicate notifications
     if (!wasAlreadyPublished && !announcement.notificationDispatched) {
       this.dispatchPublishNotification(announcement).catch((err) =>
-        logger.error("[AnnouncementService] Notification dispatch failed", err)
+        logger.error("[AnnouncementService] Notification dispatch failed", {
+          err,
+        })
       );
     }
 
@@ -809,7 +811,7 @@ class AnnouncementService {
     } catch (err) {
       logger.error(
         `[AnnouncementService] Failed to dispatch notifications for announcement ${_id}`,
-        err
+        { err }
       );
       // Do not re-throw — notification failure must not fail the publish
     }
@@ -843,7 +845,7 @@ class AnnouncementService {
         failed++;
         logger.error(
           `[AnnouncementService.processDispatchQueue] Failed for ${doc._id}`,
-          err
+          { err }
         );
       }
     }

@@ -1,6 +1,5 @@
 import { Types } from "mongoose";
 import AuditLog, { IAuditLogModel } from "../../models/auditlog.model";
-import logger from "../../utils/logger";
 import {
   AdminDispatchPayload,
   AdminNotificationFilters,
@@ -18,6 +17,7 @@ import { buildMeta } from "../../utils/helpers";
 import { ApiError } from "../../utils/ApiError";
 import User from "../../models/user.model";
 import { socketEmit } from "../../socket/socket.emitters";
+import logger from "../../lib/logger";
 
 const audit = async (
   entry: Parameters<IAuditLogModel["record"]>[0]
@@ -25,7 +25,7 @@ const audit = async (
   try {
     await (AuditLog as unknown as IAuditLogModel).record(entry);
   } catch (err) {
-    logger.error("[NotificationService] Audit log write failed", err);
+    logger.error("[NotificationService] Audit log write failed", { err });
   }
 };
 
@@ -137,7 +137,7 @@ class NotificationService {
     } catch (err) {
       logger.error(
         "[NotificationService.create] Failed to create notification",
-        err
+        { err }
       );
       return null;
     }
@@ -189,7 +189,9 @@ class NotificationService {
 
       return result.length;
     } catch (err) {
-      logger.error("[NotificationService.createBulk] Bulk insert failed", err);
+      logger.error("[NotificationService.createBulk] Bulk insert failed", {
+        err,
+      });
       return 0;
     }
   }

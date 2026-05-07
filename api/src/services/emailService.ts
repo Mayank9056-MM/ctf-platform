@@ -1,6 +1,6 @@
 import nodemailer from "nodemailer";
 import { config } from "../config/config";
-import logger from "../utils/logger";
+import logger from "../lib/logger";
 
 export class EmailService {
   private static transporter: nodemailer.Transporter | null = null;
@@ -20,6 +20,10 @@ export class EmailService {
     } else {
       logger.warn("Email service not configured - missing SMTP credentials");
     }
+  }
+
+  static getTransporter(): nodemailer.Transporter | null {
+    return this.transporter;
   }
 
   static async sendWelcomeEmail(email: string, name: string) {
@@ -56,7 +60,7 @@ export class EmailService {
       });
       logger.info("Welcome email sent:", { email });
     } catch (error) {
-      logger.error("Failed to send welcome email:", error);
+      logger.error("Failed to send welcome email:", { error });
     }
   }
 
@@ -99,7 +103,7 @@ export class EmailService {
       });
       logger.info("Password reset email sent:", { email });
     } catch (error) {
-      logger.error("Failed to send password reset email:", error);
+      logger.error("Failed to send password reset email:", { error });
     }
   }
 }

@@ -4,7 +4,6 @@ import { TokenPayload } from "../../middlewares/verifyAuth.middleware";
 import User, { IUser } from "../../models/user.model";
 import { ApiError } from "../../utils/ApiError";
 import { uploadOnCloudinary } from "../../utils/cloudinary";
-import logger from "../../utils/logger";
 import {
   changeCurrentPasswordInput,
   forgotPasswordInput,
@@ -17,6 +16,7 @@ import { EmailService } from "../../services/emailService";
 import crypto from "crypto";
 import { refreshTokenService } from "../refreshToken/refreshToken.service";
 import mongoose from "mongoose";
+import logger from "../../lib/logger";
 
 class AuthService {
   // Helper methods
