@@ -29,7 +29,7 @@ export type UploadOptions = {
 
 export type UploadResult = {
   key: string;
-  publicUrl: string;
+  // publicUrl: string;
   size: number;
   mimeType: string;
   etag?: string;
@@ -44,14 +44,14 @@ export type UploadResult = {
  * @param {string} key - The key of the object to build the URL for.
  * @returns {string} - The public URL of the object.
  */
-const buildPublicUrl = (key: string): string => {
-  if (config.AWS_S3_PUBLIC_DOMAIN) {
-    const domain = config.AWS_S3_PUBLIC_DOMAIN.replace(/\/$/, "");
-    return `${domain}/${key}`;
-  }
+// const buildPublicUrl = (key: string): string => {
+//   if (config.AWS_S3_PUBLIC_DOMAIN) {
+//     const domain = config.AWS_S3_PUBLIC_DOMAIN.replace(/\/$/, "");
+//     return `${domain}/${key}`;
+//   }
 
-  return `https://${config.AWS_S3_BUCKET_NAME}.s3.${config.AWS_REGION}.amazonaws.com/${key}`;
-};
+//   return `https://${config.AWS_S3_BUCKET_NAME}.s3.${config.AWS_REGION}.amazonaws.com/${key}`;
+// };
 
 // Core Operations
 
@@ -72,15 +72,16 @@ export async function uploadToR2(opts: UploadOptions): Promise<UploadResult> {
     Metadata: metadata,
   };
 
-  if (isPublic) {
-    input.ACL = "public-read";
-  }
+  // if (isPublic) {
+  //   input.ACL = "public-read";
+  // }
 
   const response = await s3Client.send(new PutObjectCommand(input));
 
   return {
     key,
-    publicUrl: buildPublicUrl(key),
+    // publicUrl: buildPublicUrl(key),
+    // publicUrl: response.Location,
     size: buffer.length,
     mimeType,
     etag: response.ETag?.replace(/"/g, ""),
