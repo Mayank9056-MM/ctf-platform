@@ -27,10 +27,10 @@ import UserStoryProgress, {
   IUserStoryProgress,
 } from "../../models/userProgressStory.model";
 import Submission from "../../models/submission.model";
-import logger from "../../utils/logger";
 import User from "../../models/user.model";
 import { uploadOnCloudinary } from "../../utils/cloudinary";
 import { publicDecrypt } from "node:crypto";
+import logger from "../../lib/logger";
 
 function requireNode(chapter: IStoryChapter, nodeId: string): IStoryNode {
   const node = chapter.nodes.find((n) => n._id.toString() === nodeId);
@@ -851,10 +851,9 @@ class StoryService {
       };
     } catch (err) {
       await session.abortTransaction();
-      logger.error(
-        "[StoryService._commitNodeCompletion] Transaction aborted",
-        err
-      );
+      logger.error("[StoryService._commitNodeCompletion] Transaction aborted", {
+        err,
+      });
       throw err;
     } finally {
       session.endSession();
