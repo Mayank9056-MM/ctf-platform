@@ -12,10 +12,10 @@ import { challengeService } from "./challenge.service";
 import { ApiResponse } from "../../utils/ApiResponse";
 import {
   buildAttachmentKey,
-  deleteFromR2,
-  uploadToR2,
+  deleteFromS3,
+  getPresignedUrl,
+  uploadToS3,
 } from "../../config/s3.upload";
-import logger from "../../utils/logger";
 import {
   embedFlagInImage,
   extractFlagFromImage,
@@ -23,6 +23,7 @@ import {
 } from "../../config/imageFlag";
 import path from "node:path";
 import { parseBody } from "../../utils/helpers";
+import logger from "../../lib/logger";
 
 // helpers\
 
@@ -41,23 +42,6 @@ const getIp = (req: Request): string => {
 
   return forwarded || req.socket?.remoteAddress || "unknown";
 };
-
-/**
- * Converts a public URL to a key that can be used in R2.
- * If the given URL is not a valid URL, it is assumed to already be a key and is returned as is.
- * @param {string} publicUrl - The public URL to convert to a key.
- * @returns {string} - The converted key.
- */
-function urlToKey(publicUrl: string): string {
-  try {
-    const parsed = new URL(publicUrl);
-
-    return parsed.pathname.slice(1);
-  } catch (error) {
-    // Already af key
-    return publicUrl;
-  }
-}
 
 // player controllers
 
@@ -101,9 +85,22 @@ const getChallengeDetail = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Challenge not found");
   }
 
+  const attachments = await Promise.all(
+    challenge.attachments.map(async (a) => ({
+      ...a,
+      url: await getPresignedUrl(a.key, 3600),
+    }))
+  );
+
   return res
     .status(200)
-    .json(new ApiResponse(200, challenge, "Challenge retrieved successfully"));
+    .json(
+      new ApiResponse(
+        200,
+        { ...challenge, attachments },
+        "Challenge retrieved successfully"
+      )
+    );
 });
 
 const purchaseHint = asyncHandler(async (req, res) => {
@@ -365,11 +362,10 @@ const adminAddAttachment = asyncHandler(async (req, res) => {
 
   const key = buildAttachmentKey(id, file.originalname);
 
-  const upload = await uploadToR2({
+  const upload = await uploadToS3({
     key,
     buffer: file.buffer,
     mimeType: file.mimetype,
-    isPublic: false,
     metadata: {
       challengeId: id,
       uploadedBy: req.user!._id.toString(),
@@ -381,7 +377,6 @@ const adminAddAttachment = asyncHandler(async (req, res) => {
     id,
     {
       name: displayName,
-      url: upload.publicUrl,
       size: upload.size,
       mimeType: upload.mimeType,
       key: upload.key,
@@ -408,7 +403,7 @@ const adminRemoveAttachment = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Attachment id is required");
   }
 
-  // Fetch current challenge to get the R2 key before removing from DB
+  // Fetch current challenge to get the S3 key before removing from DB
   const challenge = await challengeService.getAdminChallengesById(challengeId);
 
   if (!challenge) {
@@ -423,20 +418,18 @@ const adminRemoveAttachment = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Attachment not found");
   }
 
-  // Delete from R2 — use stored key if present, otherwise derive from URL
-  const r2Key: string = (attachment as unknown as { key?: string }).key
-    ? (attachment as unknown as { key: string }).key
-    : urlToKey(attachment.url);
+  // Delete from S3 — use stored key if present, otherwise derive from URL
+  const S3Key: string = attachment.key;
 
-  deleteFromR2(r2Key).catch((err: unknown) => {
+  deleteFromS3(S3Key).catch((err: unknown) => {
     console.error(
-      `[R2] Failed to delete object "${r2Key}" - manual cleanup needed`,
+      `[S3] Failed to delete object "${S3Key}" - manual cleanup needed`,
       err
     );
 
     logger.error(
-      `[R2] Failed to delete object "${r2Key}" - manual cleanup needed`,
-      err
+      `[S3] Failed to delete object "${S3Key}" - manual cleanup needed`,
+      { err }
     );
   });
 
@@ -504,11 +497,10 @@ const adminEmbedImageFlag = asyncHandler(async (req, res) => {
 
   const key = buildAttachmentKey(id, baseName);
 
-  const upload = await uploadToR2({
+  const upload = await uploadToS3({
     key,
     buffer: embedded.buffer,
     mimeType: embedded.mimeType,
-    isPublic: true,
     metadata: {
       challengeId: id,
       uploadedBy: req.user!._id.toString(),
@@ -523,7 +515,6 @@ const adminEmbedImageFlag = asyncHandler(async (req, res) => {
     id,
     {
       name: displayName,
-      url: upload.publicUrl,
       size: upload.size,
       mimeType: upload.mimeType,
       key: upload.key,
@@ -541,7 +532,6 @@ const adminEmbedImageFlag = asyncHandler(async (req, res) => {
           outputFormat,
           originalSize: file.buffer.length,
           processedSize: embedded.buffer.length,
-          publicUrl: upload.publicUrl,
         },
       },
       `Flag embedded in image metadata (${embedded.embeddedField}) and uploaded successfully`
@@ -582,22 +572,27 @@ const adminVerifyEmbeddedFlag = asyncHandler(async (req, res) => {
     );
   }
 
-  // Fetch the file from R2 via the public URL
-  const response = await fetch(attachment.url);
+  // Fetch the file from S3 via the private URL
+
+  const signedUrl = await getPresignedUrl(attachment.key);
+
+  const response = await fetch(signedUrl);
 
   if (!response.ok) {
-    throw new ApiError(502, "Could not fetch attachment from R2");
+    throw new ApiError(502, "Could not fetch attachment from S3");
   }
 
   const imageBuffer = Buffer.from(await response.arrayBuffer());
   const result = await extractFlagFromImage(imageBuffer);
+
+  const url = await getPresignedUrl(attachment.key);
 
   return res.status(200).json(
     new ApiResponse(
       200,
       {
         attachmentId,
-        url: attachment.url,
+        url,
         flagFound: result.found,
         extractedFlag: result.flag ?? null,
         metadata: result.allMetadata,
