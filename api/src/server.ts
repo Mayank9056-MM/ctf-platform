@@ -8,10 +8,8 @@ import mongoose from "mongoose";
 import { config } from "./config/config";
 import { app } from "./index";
 import connectDB, { getDBStatus } from "./db/index";
-import { getRedis } from "./lib/redis";
 import { EmailService } from "./services/emailService";
 import { initSocket, getIO } from "./socket/socket.gateway";
-import { connectRedis, redisClient } from "./config/redis";
 import logger, {
   emailLogger,
   mongoLogger,
@@ -19,6 +17,7 @@ import logger, {
   shutdownLogger,
   socketLogger,
 } from "./lib/logger";
+import { connectRedis, disconnectRedis } from "./lib/redis";
 
 // Constants
 
@@ -141,21 +140,10 @@ async function gracefulShutdown(signal: string): Promise<void> {
 
   // Close Redis
   try {
-    const redis = await getRedis();
-    await redis.quit();
-    redisLogger.info("Redis (lib/redis) connection closed");
+    await disconnectRedis();
+    redisLogger.info("Redis connection closed");
   } catch (err) {
-    redisLogger.warn("Error closing lib/redis — continuing", { err });
-  }
-
-  // Close Redis
-  try {
-    if (redisClient.isOpen) {
-      await redisClient.quit();
-      redisLogger.info("Redis (config/redis) connection closed");
-    }
-  } catch (err) {
-    redisLogger.warn("Error closing config/redis — continuing", { err });
+    redisLogger.warn("Error closing redis — continuing", { err });
   }
 
   // Close MongoDB
@@ -208,7 +196,6 @@ process.on("unhandledRejection", (reason: unknown) => {
     mongoLogger.info("MongoDB connected", { db: getDBStatus() });
 
     await connectRedis();
-    await getRedis();
     redisLogger.info("Redis connected");
 
     await initSocket(httpServer);

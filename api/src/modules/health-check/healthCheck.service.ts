@@ -1,3 +1,5 @@
+//src/features/healthCheck/healthCheck.service.ts
+
 import os from "os";
 import mongoose from "mongoose";
 import { HeadBucketCommand, S3Client } from "@aws-sdk/client-s3";
@@ -11,22 +13,22 @@ import {
   SystemMetrics,
 } from "./healthCheck.types";
 import { getRedis } from "../../lib/redis";
-import { redisClient } from "../../config/redis";
 import { config } from "../../config/config";
 import { getIO } from "../../socket/socket.gateway";
-import logger from "../../lib/logger";
+import { createChildLogger } from "../../lib/logger";
+
+const log = createChildLogger({ component: "health" });
 
 // Constants
 
 /** Maximum ms we allow any single downstream check to take */
 const CHECK_TIMEOUT_MS = 5_000;
 
-// Valid service names (used for single-service drill-down)
+// Valid Service Names
 
 export const VALID_SERVICES = [
   "mongodb",
   "redisCache",
-  "redisSession",
   "storage",
   "email",
   "socket",
@@ -37,11 +39,11 @@ export type ValidService = (typeof VALID_SERVICES)[number];
 // HealthService
 
 class HealthService {
-  // Private utilities
+  // Private Utilities
 
   /**
-   * Wraps a check in a hard timeout so a hung downstream (e.g. SMTP) can never
-   * block the entire health endpoint.  Always resolves — never rejects.
+   * Wraps a check in a hard timeout so a hung downstream (e.g. SMTP) can
+   * never block the entire health endpoint. Always resolves — never rejects.
    */
   private withTimeout(
     fn: () => Promise<CheckResult>,
@@ -100,11 +102,10 @@ class HealthService {
     return OverallStatus.HEALTHY;
   }
 
-  // Individual service checkers
+  // Individual Checkers
 
   /**
-   * MongoDB — checks readyState first (cheap), then issues a lightweight
-   * admin ping to confirm the TCP connection is actually live.
+   * MongoDB — cheap readyState check first, then a live admin ping.
    * readyState: 0=disconnected 1=connected 2=connecting 3=disconnecting
    */
   private async checkMongoDB(): Promise<CheckResult> {
@@ -158,14 +159,10 @@ class HealthService {
     }
   }
 
-  /**
-   * lib/redis — rate-limit / leaderboard / session-revocation store.
-   * Pings and fetches server INFO for version metadata.
-   */
   private async checkRedisCache(): Promise<CheckResult> {
     const start = this.now();
     try {
-      const redis = await getRedis();
+      const redis = getRedis(); // synchronous — returns the ioredis singleton
       const pong = await redis.ping();
       const latencyMs = this.elapsed(start);
 
@@ -185,74 +182,20 @@ class HealthService {
         status:
           latencyMs > 500 ? ServiceStatus.DEGRADED : ServiceStatus.HEALTHY,
         latencyMs,
-        message:
-          latencyMs > 500
-            ? "Redis cache responding slowly"
-            : "Redis cache healthy",
+        message: latencyMs > 500 ? "Redis responding slowly" : "Redis healthy",
         metadata: { version },
       };
     } catch (err) {
       return {
         status: ServiceStatus.UNHEALTHY,
         latencyMs: this.elapsed(start),
-        message: `Redis cache error: ${
+        message: `Redis error: ${
           err instanceof Error ? err.message : String(err)
         }`,
       };
     }
   }
 
-  /**
-   * config/redis — socket-adapter / session store (second Redis instance).
-   * Checks isOpen before pinging to surface a clean error if never connected.
-   */
-  private async checkRedisSession(): Promise<CheckResult> {
-    const start = this.now();
-    try {
-      if (!redisClient.isOpen) {
-        return {
-          status: ServiceStatus.UNHEALTHY,
-          latencyMs: this.elapsed(start),
-          message: "Redis session client is not open",
-        };
-      }
-
-      const pong = await redisClient.ping();
-      const latencyMs = this.elapsed(start);
-
-      if (pong !== "PONG") {
-        return {
-          status: ServiceStatus.DEGRADED,
-          latencyMs,
-          message: `Unexpected session Redis PING response: ${pong}`,
-        };
-      }
-
-      return {
-        status:
-          latencyMs > 500 ? ServiceStatus.DEGRADED : ServiceStatus.HEALTHY,
-        latencyMs,
-        message:
-          latencyMs > 500
-            ? "Redis session responding slowly"
-            : "Redis session healthy",
-      };
-    } catch (err) {
-      return {
-        status: ServiceStatus.UNHEALTHY,
-        latencyMs: this.elapsed(start),
-        message: `Redis session error: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      };
-    }
-  }
-
-  /**
-   * S3 / R2 — issues HeadBucket (read-only, zero data transfer).
-   * A 403 is treated as DEGRADED not UNHEALTHY because PutObject may still
-   * work with scoped IAM roles that lack s3:GetBucketAcl.
-   */
   private async checkStorage(): Promise<CheckResult> {
     const start = this.now();
     try {
@@ -306,12 +249,6 @@ class HealthService {
     }
   }
 
-  /**
-   * Email / SMTP — calls nodemailer.verify() which opens a real TCP connection
-   * and checks EHLO, but never sends a message.
-   * Returns DEGRADED (not UNHEALTHY) when credentials are simply missing,
-   * since the platform can still run without email.
-   */
   private async checkEmail(): Promise<CheckResult> {
     const start = this.now();
 
@@ -350,7 +287,8 @@ class HealthService {
         metadata: {
           host: config.SMTP_HOST,
           port: config.SMTP_PORT,
-          user: config.SMTP_USER,
+          // SMTP_USER omitted — even admin health endpoints shouldn't
+          // expose credentials in API responses
         },
       };
     } catch (err) {
@@ -365,10 +303,6 @@ class HealthService {
     }
   }
 
-  /**
-   * Socket.IO — verifies the singleton io is initialised and surfaces
-   * connected client + room counts as live metadata.
-   */
   private async checkSocket(): Promise<CheckResult> {
     const start = this.now();
     try {
@@ -396,7 +330,7 @@ class HealthService {
     }
   }
 
-  // System metrics
+  // System Metrics
 
   private collectSystemMetrics(): SystemMetrics {
     const mem = process.memoryUsage();
@@ -432,32 +366,29 @@ class HealthService {
     };
   }
 
-  // Public methods
+  // Public Methods
 
   /**
-   * Runs all service checks in parallel (each guarded by a timeout) and
+   * Runs all service checks in parallel (each guarded by a 5s timeout) and
    * returns a fully populated HealthResponse.
-   * Called by the full GET /health endpoint.
+   * Called by GET /health.
    */
   async runChecks(): Promise<HealthResponse> {
     const globalStart = this.now();
 
-    const [mongodb, redisCache, redisSession, storage, email, socket] =
-      await Promise.all([
-        this.withTimeout(() => this.checkMongoDB(), "MongoDB"),
-        this.withTimeout(() => this.checkRedisCache(), "RedisCache"),
-        this.withTimeout(() => this.checkRedisSession(), "RedisSession"),
-        this.withTimeout(() => this.checkStorage(), "Storage"),
-        this.withTimeout(() => this.checkEmail(), "Email"),
-        this.withTimeout(() => this.checkSocket(), "Socket"),
-      ]);
+    const [mongodb, redisCache, storage, email, socket] = await Promise.all([
+      this.withTimeout(() => this.checkMongoDB(), "MongoDB"),
+      this.withTimeout(() => this.checkRedisCache(), "Redis"),
+      this.withTimeout(() => this.checkStorage(), "Storage"),
+      this.withTimeout(() => this.checkEmail(), "Email"),
+      this.withTimeout(() => this.checkSocket(), "Socket"),
+    ]);
 
     const totalDurationMs = this.elapsed(globalStart);
 
     const overallStatus = this.deriveOverallStatus([
       mongodb.status,
       redisCache.status,
-      redisSession.status,
       storage.status,
       email.status,
       socket.status,
@@ -472,7 +403,6 @@ class HealthService {
       services: {
         mongodb: this.toServiceCheck(mongodb),
         redisCache: this.toServiceCheck(redisCache),
-        redisSession: this.toServiceCheck(redisSession),
         storage: this.toServiceCheck(storage),
         email: this.toServiceCheck(email),
         socket: this.toServiceCheck(socket),
@@ -480,13 +410,12 @@ class HealthService {
       system: this.collectSystemMetrics(),
     };
 
-    // Dev-time shape guard
+    // Dev-time shape guard — safeParse so a schema mismatch never throws
     const parsed = HealthResponseSchema.safeParse(response);
     if (!parsed.success) {
-      logger.error(
-        "[HealthService] Response schema validation failed:",
-        parsed.error.format()
-      );
+      log.error("Health response schema validation failed", {
+        err: parsed.error.format(),
+      });
     }
 
     return response;
@@ -500,7 +429,6 @@ class HealthService {
     const checkerMap: Record<ValidService, () => Promise<CheckResult>> = {
       mongodb: () => this.checkMongoDB(),
       redisCache: () => this.checkRedisCache(),
-      redisSession: () => this.checkRedisSession(),
       storage: () => this.checkStorage(),
       email: () => this.checkEmail(),
       socket: () => this.checkSocket(),
@@ -515,6 +443,6 @@ class HealthService {
   }
 }
 
-// Singleton export (mirrors authService / refreshTokenService pattern)
+// Singleton
 
 export const healthService = new HealthService();

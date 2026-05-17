@@ -55,8 +55,7 @@ export const SystemMetricsSchema = z.object({
 export const ServicesSchema = z.object({
   mongodb: ServiceCheckSchema,
   redisCache: ServiceCheckSchema, // lib/redis (rate-limit / leaderboard / session)
-  redisSession: ServiceCheckSchema, // config/redis (session store)
-  storage: ServiceCheckSchema, // S3 / R2
+  storage: ServiceCheckSchema, // S3
   email: ServiceCheckSchema,
   socket: ServiceCheckSchema,
 });

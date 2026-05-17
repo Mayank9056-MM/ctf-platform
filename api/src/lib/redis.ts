@@ -1,77 +1,178 @@
-import { createClient, type RedisClientType } from "redis";
+// src/lib/redis.ts
+
+import Redis, { type Redis as RedisClient, type RedisOptions } from "ioredis";
 import { config } from "../config/config";
 import logger from "./logger";
 
-// Singleton
+// Shared connection options
 
-let client: RedisClientType | null = null;
+const BASE_OPTIONS: RedisOptions = {
+  lazyConnect: true,
 
-export async function getRedis(): Promise<RedisClientType> {
-  if (!client) {
-    client = createClient({ url: config.REDIS_URL }) as RedisClientType;
+  retryStrategy(times: number): number | null {
+    if (times > 10) {
+      logger.error("[Redis] Max reconnect attempts reached — giving up");
+      return null; // stop retrying
+    }
+    const delay = Math.min(100 * Math.pow(2, times), 10_000);
+    logger.warn("[Redis] Reconnecting…", { attempt: times, delay_ms: delay });
+    return delay;
+  },
 
-    client.on("error", (err) => logger.error("[Redis] Client error:", err));
-    client.on("reconnecting", () => logger.warn("[Redis] Reconnecting…"));
+  // How long to wait for a command before rejecting the promise.
+  commandTimeout: 5_000,
 
-    await client.connect();
-    logger.info("[Redis] Connected");
-  }
+  // How long to wait for a new connection before failing.
+  connectTimeout: 10_000,
+
+  // Keep TCP connection alive — prevents firewalls from dropping idle connections.
+  keepAlive: 10_000,
+
+  // Print ioredis debug info in development.
+  showFriendlyErrorStack: config.NODE_ENV !== "production",
+};
+
+// Main client (singleton)
+// Used for: caching, rate-limiting, session revocation, leaderboard reads.
+
+let _mainClient: RedisClient | null = null;
+
+function buildClient(): RedisClient {
+  const client = new Redis(config.REDIS_URL, BASE_OPTIONS);
+
+  client.on("connect", () => logger.info("[Redis] TCP connection established"));
+  client.on("ready", () => logger.info("[Redis] Ready — accepting commands"));
+  client.on("reconnecting", () => logger.warn("[Redis] Reconnecting…"));
+  client.on("end", () => logger.info("[Redis] Connection closed"));
+  client.on("error", (err) =>
+    logger.error("[Redis] Connection error", { err })
+  );
 
   return client;
 }
 
-// Key builders
+/**
+ * Connect the main Redis client.
+ * Call once during server startup. Throws if the connection fails.
+ */
+export async function connectRedis(): Promise<void> {
+  if (_mainClient) {
+    logger.warn(
+      "[Redis] connectRedis() called but client already exists — ignoring"
+    );
+    return;
+  }
 
-const KEY = {
-  /** Rate-limit counter: wrong flag attempts per user per challenge per window */
-  rateLimit: (userId: string, challengeId: string) =>
+  _mainClient = buildClient();
+
+  try {
+    await _mainClient.connect();
+    logger.info("[Redis] Main client connected");
+  } catch (err) {
+    logger.error("[Redis] Failed to connect — fatal", { err });
+    throw err;
+  }
+}
+
+/**
+ * Return the main Redis client. Throws if connectRedis() was never called.
+ * Use this in your service layer.
+ */
+export function getRedis(): RedisClient {
+  if (!_mainClient) {
+    throw new Error(
+      "[Redis] getRedis() called before connectRedis(). " +
+        "Ensure connectRedis() is awaited during startup."
+    );
+  }
+  return _mainClient;
+}
+
+/**
+ * Gracefully close the main client.
+ * Call from gracefulShutdown() in server.ts.
+ * quit() sends QUIT to Redis and waits for the server's ACK — clean close.
+ * If quit() itself hangs (e.g. network is gone), disconnect() forces close.
+ */
+export async function disconnectRedis(): Promise<void> {
+  if (!_mainClient) return;
+
+  try {
+    await _mainClient.quit();
+    logger.info("[Redis] Main client disconnected (quit)");
+  } catch {
+    _mainClient.disconnect();
+    logger.warn("[Redis] Main client force-disconnected");
+  } finally {
+    _mainClient = null;
+  }
+}
+
+// Queue connection factory
+
+export function createQueueConnection(): RedisClient {
+  return new Redis(config.REDIS_URL, {
+    ...BASE_OPTIONS,
+    maxRetriesPerRequest: null,
+    // Queue connections are long-lived blocking connections — give them more time.
+    commandTimeout: undefined,
+  });
+}
+
+// Key namespace registry
+// All Redis key patterns in one place prevents naming collisions across teams.
+
+export const REDIS_KEYS = {
+  // Rate limiting
+  flagRateLimit: (userId: string, challengeId: string) =>
     `rl:flag:${userId}:${challengeId}`,
+  apiRateLimit: (ip: string, route: string) => `rl:api:${ip}:${route}`,
 
-  /** Leaderboard snapshot (optional Redis cache on top of MongoDB snapshot) */
+  // Leaderboard cache
   leaderboard: (scope: string, eventId?: string) =>
     `lb:${scope}${eventId ? `:${eventId}` : ""}`,
 
-  /** Session revocation list — used when revokeAllForUser is called */
+  // Auth / session
   revokedFamily: (family: string) => `revoked:family:${family}`,
+  refreshBlacklist: (jti: string) => `blacklist:rt:${jti}`,
+
+  // BullMQ job dedup keys
+  jobDedup: (jobType: string, id: string) => `dedup:${jobType}:${id}`,
 } as const;
 
-// Rate-limit helpers
-// Used in submissionService instead of (or alongside) DB countRecentFailures.
-// Redis INCR + EXPIRE is faster than a MongoDB count on large submission tables.
+// TTL constants
 
-const RATE_WINDOW_SECONDS = 60;
+export const TTL = {
+  FLAG_RATE_WINDOW: 60, // 60 s  — wrong flag attempts
+  LEADERBOARD: 60, // 60 s  — leaderboard snapshot
+  SESSION_REVOCATION: 60 * 60 * 24 * 7, // 7 days — revoked families
+  ANNOUNCEMENT_CACHE: 60 * 5, // 5 min  — pinned announcements
+} as const;
+
+// Rate-limit cache
+// Uses INCR + conditional EXPIRE. This is an atomic pattern — do NOT replace
+// with GET + SET because that introduces a TOCTOU race condition.
+
 const MAX_WRONG_ATTEMPTS = 5;
 
 export const rateLimitCache = {
-  /**
-   * Increment the wrong-attempt counter for a user+challenge in the current window.
-   * Returns the new count. The key auto-expires after RATE_WINDOW_SECONDS.
-   */
   async increment(userId: string, challengeId: string): Promise<number> {
-    const redis = await getRedis();
-    const key = KEY.rateLimit(userId, challengeId);
-
+    const redis = getRedis();
+    const key = REDIS_KEYS.flagRateLimit(userId, challengeId);
     const count = await redis.incr(key);
-
-    // Set expiry only on first increment (otherwise we'd reset the window)
-    if (count === 1) {
-      await redis.expire(key, RATE_WINDOW_SECONDS);
-    }
-
+    if (count === 1) await redis.expire(key, TTL.FLAG_RATE_WINDOW);
     return count;
   },
 
-  /** Check current attempt count without incrementing. */
   async count(userId: string, challengeId: string): Promise<number> {
-    const redis = await getRedis();
-    const val = await redis.get(KEY.rateLimit(userId, challengeId));
+    const val = await getRedis().get(
+      REDIS_KEYS.flagRateLimit(userId, challengeId)
+    );
     return val ? parseInt(val, 10) : 0;
   },
 
-  /** Manually reset (e.g. after a correct solve). */
   async reset(userId: string, challengeId: string): Promise<void> {
-    const redis = await getRedis();
-    await redis.del(KEY.rateLimit(userId, challengeId));
+    await getRedis().del(REDIS_KEYS.flagRateLimit(userId, challengeId));
   },
 
   isOverLimit(count: number): boolean {
@@ -80,46 +181,39 @@ export const rateLimitCache = {
 };
 
 // Leaderboard cache
-// Optional layer on top of the MongoDB Leaderboard snapshot.
-// Useful if you want sub-millisecond reads for the top-10 board.
-
-const LEADERBOARD_TTL_SECONDS = 60; // 1 min
 
 export const leaderboardCache = {
   async set(scope: string, data: unknown, eventId?: string): Promise<void> {
-    const redis = await getRedis();
-    await redis.setEx(
-      KEY.leaderboard(scope, eventId),
-      LEADERBOARD_TTL_SECONDS,
+    await getRedis().setex(
+      REDIS_KEYS.leaderboard(scope, eventId),
+      TTL.LEADERBOARD,
       JSON.stringify(data)
     );
   },
 
   async get<T>(scope: string, eventId?: string): Promise<T | null> {
-    const redis = await getRedis();
-    const raw = await redis.get(KEY.leaderboard(scope, eventId));
+    const raw = await getRedis().get(REDIS_KEYS.leaderboard(scope, eventId));
     return raw ? (JSON.parse(raw) as T) : null;
   },
 
   async invalidate(scope: string, eventId?: string): Promise<void> {
-    const redis = await getRedis();
-    await redis.del(KEY.leaderboard(scope, eventId));
+    await getRedis().del(REDIS_KEYS.leaderboard(scope, eventId));
   },
 };
 
-// Session revocation
-
-const REVOCATION_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days
+// Session revocation cache
 
 export const revocationCache = {
   async markFamilyRevoked(family: string): Promise<void> {
-    const redis = await getRedis();
-    await redis.setEx(KEY.revokedFamily(family), REVOCATION_TTL_SECONDS, "1");
+    await getRedis().setex(
+      REDIS_KEYS.revokedFamily(family),
+      TTL.SESSION_REVOCATION,
+      "1"
+    );
   },
 
   async isFamilyRevoked(family: string): Promise<boolean> {
-    const redis = await getRedis();
-    const val = await redis.get(KEY.revokedFamily(family));
+    const val = await getRedis().get(REDIS_KEYS.revokedFamily(family));
     return val === "1";
   },
 };

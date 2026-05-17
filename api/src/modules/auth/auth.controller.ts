@@ -11,18 +11,17 @@ import {
   resetPasswordSchema,
 } from "./auth.validator";
 import { CookieOptions } from "express";
-import User from "../../models/user.model";
 import { verifyGoogleToken } from "../oauth/google.verify";
 import {
   getGithubAccessToken,
   verifyGithubToken,
 } from "../oauth/github.verify";
-import { cacheService } from "../../services/cacheService";
 import jwt from "jsonwebtoken";
 import { getClientIp, parseBody } from "../../utils/helpers";
 import { refreshTokenService } from "../refreshToken/refreshToken.service";
 import { config } from "../../config/config";
 import ms from "ms";
+import { cacheService, revocationCache } from "../../services/cacheService";
 
 const register = asyncHandler(async (req, res) => {
   const data = parseBody(registerSchema, req.body);
@@ -150,7 +149,7 @@ const logout = asyncHandler(async (req, res) => {
   if (accessToken) {
     const decoded = jwt.decode(accessToken) as { exp: number };
     const ttl = decoded?.exp - Math.floor(Date.now() / 1000);
-    if (ttl > 0) await cacheService.set(`blacklist:${accessToken}`, "1", ttl);
+    if (ttl > 0) await revocationCache.blacklistAccessToken(accessToken, ttl);
   }
 
   return res
