@@ -1,7 +1,7 @@
 import sharp from "sharp";
 import { ApiError } from "../utils/ApiError";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// Types
 
 export type SupportedImageFormat = "jpeg" | "jpg" | "png" | "webp";
 
