@@ -1,12 +1,14 @@
+// src/socket/socket.gateway.ts
+
 import { Server as HTTPServer } from "http";
 import { Server as SocketServer } from "socket.io";
 import { createAdapter } from "@socket.io/redis-adapter";
-import { createClient } from "redis";
 import { config } from "../config/config";
+import { createQueueConnection } from "../lib/redis";
 import { verifySocketAuth } from "./socket.middleware";
-import logger from "../lib/logger";
+import { socketLogger } from "../lib/logger";
 
-// Types that mirror the frontend types
+// Event Type Maps
 
 type ServerToClientEvents = {
   "leaderboard:updated": (data: { scope: string; eventId?: string }) => void;
@@ -76,35 +78,45 @@ type ClientToServerEvents = {
 
 let io: SocketServer<ClientToServerEvents, ServerToClientEvents> | null = null;
 
-// Room naming helpers
+// Room Naming Helpers
 
 /** Personal room — only this user receives events here */
 export const userRoom = (userId: string) => `user:${userId}`;
-
 /** Team room — all team members receive events here */
 export const teamRoom = (teamId: string) => `team:${teamId}`;
-
 /** Event room — all participants in a live CTF event */
 export const eventRoom = (eventId: string) => `event:${eventId}`;
-
 /** Global room — everyone on the platform (first blood, announcements) */
 export const GLOBAL_ROOM = "global";
 
-// Initialise
+// Init
 
 export async function initSocket(
   httpServer: HTTPServer
 ): Promise<SocketServer<ClientToServerEvents, ServerToClientEvents>> {
-  // Redis clients (one pub, one sub — required by Redis adapter)
-  const pubClient = createClient({ url: config.REDIS_URL });
-  const subClient = pubClient.duplicate();
+  // Redis adapter requires two dedicated connections — one for publishing,
+  // one for subscribing. A client in subscribe mode can only run SUB commands,
+  // so we cannot reuse the main getRedis() singleton.
+  //
+  // createQueueConnection() returns an ioredis client configured for
+  // long-lived connections (no commandTimeout, maxRetriesPerRequest: null).
+  // This is correct for pub/sub which holds a persistent blocking connection.
+  const pubClient = createQueueConnection();
+  const subClient = createQueueConnection();
 
+  // Register error handlers BEFORE connect so errors during the handshake
+  // are caught. The original code registered these after connect() returned,
+  // meaning a connection error in the first few ms would be unhandled.
+  pubClient.on("error", (err) =>
+    socketLogger.error("Redis pub client error", { err })
+  );
+  subClient.on("error", (err) =>
+    socketLogger.error("Redis sub client error", { err })
+  );
+
+  // ioredis with lazyConnect: true requires explicit connect()
   await Promise.all([pubClient.connect(), subClient.connect()]);
 
-  pubClient.on("error", (err) => logger.error("[Redis pub]", err));
-  subClient.on("error", (err) => logger.error("[Redis sub]", err));
-
-  // Socket.io server
   io = new SocketServer(httpServer, {
     adapter: createAdapter(pubClient, subClient),
     cors: {
@@ -112,52 +124,80 @@ export async function initSocket(
       credentials: true,
     },
     transports: ["websocket", "polling"],
-    // Disconnect clients that don't ping within 60s
     pingTimeout: 60_000,
     pingInterval: 25_000,
   });
 
-  // Auth middleware
-  // Validates the httpOnly refresh cookie or bearer token on every connection.
+  // Auth middleware — validates httpOnly refresh cookie or bearer token
   io.use(verifySocketAuth);
 
-  // Connection handler
+  // Connection Handler
+
   io.on("connection", (socket) => {
     const userId = (socket.data as { userId?: string }).userId;
-    logger.info(`[Socket] ${userId ?? "anonymous"} connected — ${socket.id}`);
 
-    // Always join the global room
-    socket.join(GLOBAL_ROOM);
-
-    // Join personal + team rooms when client requests
-    socket.on("room:join", ({ userId, teamId }) => {
-      socket.join(userRoom(userId));
-      if (teamId) socket.join(teamRoom(teamId));
+    socketLogger.info("Client connected", {
+      socketId: socket.id,
+      userId: userId ?? "anonymous",
     });
 
-    // Join / leave event rooms for live leaderboard
-    socket.on("room:join_event", ({ eventId }) =>
-      socket.join(eventRoom(eventId))
-    );
-    socket.on("room:leave_event", ({ eventId }) =>
-      socket.leave(eventRoom(eventId))
-    );
+    socket.join(GLOBAL_ROOM);
+
+    socket.on("room:join", ({ userId: uid, teamId }) => {
+      socket.join(userRoom(uid));
+      if (teamId) socket.join(teamRoom(teamId));
+
+      socketLogger.debug("Client joined rooms", {
+        socketId: socket.id,
+        userId: uid,
+        teamId,
+      });
+    });
+
+    socket.on("room:join_event", ({ eventId }) => {
+      socket.join(eventRoom(eventId));
+      socketLogger.debug("Client joined event room", {
+        socketId: socket.id,
+        userId,
+        eventId,
+      });
+    });
+
+    socket.on("room:leave_event", ({ eventId }) => {
+      socket.leave(eventRoom(eventId));
+      socketLogger.debug("Client left event room", {
+        socketId: socket.id,
+        userId,
+        eventId,
+      });
+    });
 
     socket.on("disconnect", (reason) => {
-      logger.info(`[Socket] ${userId ?? "anonymous"} disconnected — ${reason}`);
+      socketLogger.info("Client disconnected", {
+        socketId: socket.id,
+        userId: userId ?? "anonymous",
+        reason,
+      });
     });
   });
 
-  logger.info("[Socket] Server initialised with Redis adapter");
+  socketLogger.info("Socket.IO server initialised", {
+    transport: ["websocket", "polling"],
+    adapter: "redis",
+  });
+
   return io;
 }
 
-// Getter (for use in services)
+// Getter
 
 export function getIO(): SocketServer<
   ClientToServerEvents,
   ServerToClientEvents
 > {
-  if (!io) throw new Error("[Socket] Call initSocket(httpServer) first");
+  if (!io)
+    throw new Error(
+      "Socket.IO not initialised — call initSocket(httpServer) first"
+    );
   return io;
 }
