@@ -8,6 +8,7 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { config } from "./config";
+import logger from "../lib/logger";
 
 // Client
 
@@ -23,45 +24,25 @@ export type UploadOptions = {
   key: string;
   buffer: Buffer;
   mimeType: string;
-  isPublic?: boolean;
   metadata?: Record<string, string>;
 };
 
 export type UploadResult = {
   key: string;
-  // publicUrl: string;
   size: number;
   mimeType: string;
   etag?: string;
 };
 
-// Helpers
-
-/**
- * Builds a public URL for an object in R2.
- * If the public domain is set in the config, it is used to build the URL.
- * Otherwise, the default AWS S3 URL is used.
- * @param {string} key - The key of the object to build the URL for.
- * @returns {string} - The public URL of the object.
- */
-// const buildPublicUrl = (key: string): string => {
-//   if (config.AWS_S3_PUBLIC_DOMAIN) {
-//     const domain = config.AWS_S3_PUBLIC_DOMAIN.replace(/\/$/, "");
-//     return `${domain}/${key}`;
-//   }
-
-//   return `https://${config.AWS_S3_BUCKET_NAME}.s3.${config.AWS_REGION}.amazonaws.com/${key}`;
-// };
-
 // Core Operations
 
 /**
- * Uploads an object to R2.
+ * Uploads an object to S3.
  * @param {UploadOptions} opts - Options for uploading the object.
  * @returns {Promise<UploadResult>} A promise resolving to the uploaded object's details.
  */
-export async function uploadToR2(opts: UploadOptions): Promise<UploadResult> {
-  const { key, buffer, mimeType, isPublic = false, metadata = {} } = opts;
+export async function uploadToS3(opts: UploadOptions): Promise<UploadResult> {
+  const { key, buffer, mimeType, metadata = {} } = opts;
 
   const input: PutObjectCommandInput = {
     Bucket: config.AWS_S3_BUCKET_NAME,
@@ -71,10 +52,6 @@ export async function uploadToR2(opts: UploadOptions): Promise<UploadResult> {
     ContentLength: buffer.length,
     Metadata: metadata,
   };
-
-  // if (isPublic) {
-  //   input.ACL = "public-read";
-  // }
 
   const response = await s3Client.send(new PutObjectCommand(input));
 
@@ -93,7 +70,7 @@ export async function uploadToR2(opts: UploadOptions): Promise<UploadResult> {
  * @param {string} key - The key of the object to delete.
  * @returns {Promise<void>} A promise resolving to void when the object is deleted.
  */
-export async function deleteFromR2(key: string): Promise<void> {
+export async function deleteFromS3(key: string): Promise<void> {
   await s3Client.send(
     new DeleteObjectCommand({
       Bucket: config.AWS_S3_BUCKET_NAME,
@@ -103,7 +80,7 @@ export async function deleteFromR2(key: string): Promise<void> {
 }
 
 /**
- * Generates a presigned URL for downloading an object from R2.
+ * Generates a presigned URL for downloading an object from S3.
  * @param {string} key - The key of the object to download.
  * @param {number} [expiresInSeconds=3600] - The number of seconds the presigned URL is valid for.
  * @returns {Promise<string>} A promise resolving to the presigned URL.
@@ -112,6 +89,10 @@ export async function getPresignedUrl(
   key: string,
   expiresInSeconds = 3600
 ): Promise<string> {
+  if (!key) {
+    throw new Error("Key is required");
+  }
+
   const command = new GetObjectCommand({
     Bucket: config.AWS_S3_BUCKET_NAME,
     Key: key,
@@ -121,7 +102,7 @@ export async function getPresignedUrl(
 }
 
 /**
- * Generates a presigned URL for uploading an object to R2.
+ * Generates a presigned URL for uploading an object to S3.
  * @param {string} key - The key of the object to upload.
  * @param {string} mimeType - The MIME type of the object to upload.
  * @param {number} [expiresInSeconds=300] - The number of seconds the presigned URL is valid for.
