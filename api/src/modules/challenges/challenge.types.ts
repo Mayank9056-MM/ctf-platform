@@ -48,10 +48,9 @@ export type AddHintInput = {
 
 export type AddAttachmentInput = {
   name: string;
-  url: string;
   size: number;
   mimeType: string;
-  key?: string;
+  key: string;
 };
 
 export type ChallengeFilterInput = {
