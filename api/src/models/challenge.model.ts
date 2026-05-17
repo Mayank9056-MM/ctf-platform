@@ -13,7 +13,6 @@ export interface IHint {
 export interface IAttachment {
   _id: Types.ObjectId;
   name: string;
-  url: string;
   size: number;
   mimeType: string;
   uploadedAt: Date;
@@ -143,10 +142,6 @@ const attachmentSchema = new mongoose.Schema<IAttachment>({
     type: String,
     required: [true, "Attachment name is required"],
     maxlength: [100, "Attachment name cannot exceed 100 characters"],
-  },
-  url: {
-    type: String,
-    required: [true, "Attachment URL is required"],
   },
   size: {
     type: Number,
