@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import mongoose, { Types } from "mongoose";
+import { Types } from "mongoose";
 import {
   FLAG_SHARE_ALERT_THRESHOLD,
   MAX_FLAG_ATTEMPTS_PER_WINDOW,
@@ -25,7 +25,7 @@ import Team from "../../models/team.model";
 import AuditLog, { IAuditLogModel } from "../../models/auditlog.model";
 import { storyService } from "../story/story.service";
 import { leaderboardService } from "../leaderboard/leaderboard.service";
-import { rateLimitCache } from "../../lib/redis";
+import { rateLimitCache } from "../../services/cacheService";
 import { socketEmit } from "../../socket/socket.emitters";
 import logger from "../../lib/logger";
 
