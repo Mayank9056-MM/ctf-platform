@@ -1,6 +1,7 @@
 import { Types } from "mongoose";
 import Challenge, {
   ChallengeDifficulty,
+  IAttachment,
   IChallenge,
 } from "../../models/challenge.model";
 import { ApiError } from "../../utils/ApiError";
@@ -18,6 +19,7 @@ import {
   UpdateChallengeInput,
 } from "./challenge.types";
 import AuditLog, { IAuditLogModel } from "../../models/auditlog.model";
+import { getPresignedUrl } from "../../config/s3.upload";
 
 class ChallengeService {
   private ALLOWED_CHALLENGE_UPDATE_FIELDS = [
@@ -726,7 +728,7 @@ class ChallengeService {
     challengeId: string,
     attachment: AddAttachmentInput,
     requesterId: Types.ObjectId
-  ): Promise<IChallenge> {
+  ): Promise<IChallenge & { attachments: (IAttachment & { url: string })[] }> {
     const challenge = await this.findActiveChallenges(challengeId);
 
     challenge.attachments.push({
@@ -754,7 +756,15 @@ class ChallengeService {
         size: attachment.size,
       },
     });
-    return challenge;
+
+    const attachments = await Promise.all(
+      challenge.attachments.map(async (a) => ({
+        ...a,
+        url: await getPresignedUrl(a.key, 3600),
+      }))
+    );
+
+    return { ...challenge.toObject(), attachments };
   }
 
   /**
