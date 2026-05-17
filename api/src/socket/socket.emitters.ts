@@ -1,4 +1,6 @@
-import logger from "../lib/logger";
+//src/socket/socket.emitters.ts
+
+import { socketLogger } from "../lib/logger";
 import {
   getIO,
   GLOBAL_ROOM,
@@ -7,24 +9,33 @@ import {
   eventRoom,
 } from "./socket.gateway";
 
-// Safe wrapper
+// Safe Emit Wrapper
 
-function safeEmit(fn: () => void): void {
+/**
+ * Wraps an emit call so a throw (e.g. Socket.IO not yet initialised during
+ * startup, or a connection race at shutdown) doesn't crash the caller.
+ *
+ * We log at warn rather than error because this is a degraded-state condition,
+ * not an operation failure — the event is lost but the caller can continue.
+ */
+function safeEmit(eventName: string, fn: () => void): void {
   try {
     fn();
   } catch (err) {
-    logger.warn(
-      "[SocketEmit] Emit failed — socket may not be initialised yet:",
-      { err }
-    );
+    socketLogger.warn("Emit failed — socket may not be initialised", {
+      event: eventName,
+      err,
+    });
   }
 }
 
 // Emitters
-export const socketEmit = {
-  // First blood — broadcast to everyone
-  // Call from: submissionService.submitFlag() when isFirstBlood = true
 
+export const socketEmit = {
+  /**
+   * First blood — broadcast to every connected client.
+   * Call from: submissionService.submitFlag() when isFirstBlood = true
+   */
   firstBlood(data: {
     challengeId: string;
     challengeTitle: string;
@@ -35,14 +46,15 @@ export const socketEmit = {
     teamName?: string;
     pointsAwarded: number;
   }) {
-    safeEmit(() =>
+    safeEmit("submission:first_blood", () =>
       getIO().to(GLOBAL_ROOM).emit("submission:first_blood", data)
     );
   },
 
-  // Correct solve — personal (only the solver receives this)
-  // Call from: submissionService.submitFlag() when isCorrect = true
-
+  /**
+   * Correct solve — personal (only the solver receives this).
+   * Call from: submissionService.submitFlag() when isCorrect = true
+   */
   correctSolve(
     userId: string,
     data: {
@@ -53,37 +65,36 @@ export const socketEmit = {
       rank: number;
     }
   ) {
-    safeEmit(() =>
+    safeEmit("submission:correct", () =>
       getIO().to(userRoom(userId)).emit("submission:correct", data)
     );
   },
 
-  // Leaderboard updated — broadcast scope change
-  // Call from: leaderboardService.recompute() after computing a board
-  // Clients use this to invalidate their TanStack Query cache
-
+  /**
+   * Leaderboard updated — tells clients to invalidate their TanStack Query cache.
+   * Call from: leaderboardService.recompute() after computing a board.
+   */
   leaderboardUpdated(scope: string, eventId?: string) {
-    safeEmit(() => {
+    safeEmit("leaderboard:updated", () => {
       const io = getIO();
-
       if (eventId) {
-        // Only tell clients in the event room
         io.to(eventRoom(eventId)).emit("leaderboard:updated", {
           scope,
           eventId,
         });
       } else {
-        // Global board — tell everyone
         io.to(GLOBAL_ROOM).emit("leaderboard:updated", { scope });
       }
     });
   },
 
-  // New notification — personal
-  // Call from: notificationService.create() after persisting the notification
-
+  /**
+   * New notification — personal or broadcast.
+   * Call from: notificationService.create()
+   * Pass recipientId = null to broadcast to all connected users.
+   */
   newNotification(
-    recipientId: string | null, // null = broadcast to all
+    recipientId: string | null,
     data: {
       _id: string;
       type: string;
@@ -93,71 +104,76 @@ export const socketEmit = {
       createdAt: string;
     }
   ) {
-    safeEmit(() => {
+    safeEmit("notification:new", () => {
       const io = getIO();
-
       if (recipientId) {
         io.to(userRoom(recipientId)).emit("notification:new", data);
       } else {
-        // Broadcast notification — send to all connected users
         io.to(GLOBAL_ROOM).emit("notification:new", data);
       }
     });
   },
 
-  // Event status changed — broadcast
-  // Call from: eventService.transitionTo()
-
+  /**
+   * Event status changed — broadcast.
+   * Call from: eventService.transitionTo()
+   */
   eventStatusChanged(data: {
     eventId: string;
     slug: string;
     name: string;
     status: string;
   }) {
-    safeEmit(() => getIO().to(GLOBAL_ROOM).emit("event:status_changed", data));
+    safeEmit("event:status_changed", () =>
+      getIO().to(GLOBAL_ROOM).emit("event:status_changed", data)
+    );
   },
 
-  // Scoreboard freeze — event room only
-  // Call from: eventService.setScoreboardFrozen()
-
+  /**
+   * Scoreboard frozen/unfrozen — event room only.
+   * Call from: eventService.setScoreboardFrozen()
+   */
   scoreboardFrozen(data: {
     eventId: string;
     frozen: boolean;
     frozenAt?: string;
   }) {
-    safeEmit(() =>
+    safeEmit("event:scoreboard_frozen", () =>
       getIO().to(eventRoom(data.eventId)).emit("event:scoreboard_frozen", data)
     );
   },
 
-  // Announcement published — broadcast or targeted
-  // Call from: announcementService after publish()
-
+  /**
+   * Announcement published — global broadcast.
+   * Call from: announcementService.publish()
+   */
   announcementPublished(data: {
     _id: string;
     title: string;
     severity: string;
-    audience: string; // "all" | "teams" | "solo" | "specific"
+    audience: string;
   }) {
-    safeEmit(() =>
+    safeEmit("announcement:published", () =>
       getIO().to(GLOBAL_ROOM).emit("announcement:published", data)
     );
   },
 
-  // Team member joined
-  // Call from: teamService after joinTeamByCode() or acceptInvite()
-
+  /**
+   * Team member joined.
+   * Call from: teamService after joinTeamByCode() or acceptInvite()
+   */
   teamMemberJoined(teamId: string, userId: string, username: string) {
-    safeEmit(() =>
+    safeEmit("team:member_joined", () =>
       getIO()
         .to(teamRoom(teamId))
         .emit("team:member_joined", { teamId, userId, username })
     );
   },
 
-  // Team challenge solved
-  // Call from: submissionService after a correct solve when user has a team
-
+  /**
+   * Team challenge solved.
+   * Call from: submissionService after a correct solve when user has a team.
+   */
   teamChallengeSolved(data: {
     teamId: string;
     challengeId: string;
@@ -165,7 +181,7 @@ export const socketEmit = {
     solverUsername: string;
     pointsAwarded: number;
   }) {
-    safeEmit(() =>
+    safeEmit("team:challenge_solved", () =>
       getIO().to(teamRoom(data.teamId)).emit("team:challenge_solved", data)
     );
   },
