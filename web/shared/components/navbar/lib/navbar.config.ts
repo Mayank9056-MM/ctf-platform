@@ -12,7 +12,7 @@ import {
   User,
   Users,
 } from "lucide-react";
-import type { DropdownItem, NavItem } from "../types/navbar.types";
+import type { DropdownItem, NavItem, PublicNavItem } from "../types/navbar.types";
 
 // Primary nav
 
@@ -23,6 +23,12 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Leaderboard", href: "/leaderboard", icon: Trophy },
   { label: "Stories", href: "/stories", icon: BookOpen },
   { label: "Teams", href: "/teams", icon: Users },
+];
+
+export const PUBLIC_NAV_ITEMS: PublicNavItem[] = [
+  { label: "Events", href: "/events", icon: Radio },
+  { label: "Leaderboard", href: "/leaderboard", icon: Trophy },
+  { label: "Stories", href: "/stories", icon: BookOpen },
 ];
 
 // User dropdown
