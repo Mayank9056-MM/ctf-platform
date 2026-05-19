@@ -21,7 +21,6 @@ const PUBLIC_EXACT: Set<string> = new Set([
  */
 const PUBLIC_PREFIXES: string[] = [
   "/auth/", // OAuth callbacks
-  "/challenges", // Public challenge listing (read-only)
   "/leaderboard", // Public scoreboard
   "/stories", // Public story listing
   "/events", // Public event listing
