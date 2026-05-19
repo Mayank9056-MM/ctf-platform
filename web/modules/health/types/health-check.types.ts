@@ -17,13 +17,20 @@ export enum OverallStatus {
 export const VALID_SERVICES = [
   "mongodb",
   "redisCache",
-  "redisSession",
   "storage",
   "email",
   "socket",
 ] as const;
 
 export type ValidService = (typeof VALID_SERVICES)[number];
+
+export interface ServiceCheckData {
+  status: ServiceStatus;
+  message: string;
+  latencyMs: number;
+  checkedAt: string;
+  metadata?: Record<string, unknown>;
+}
 
 // Service check
 
