@@ -100,7 +100,7 @@ class AuthService {
       avatarUrl = upload.secure_url;
       avatarPublicId = upload.public_id;
     } catch (error) {
-      logger.error("something went wrong while uploading avatar", error);
+      logger.error("something went wrong while uploading avatar", { error });
       throw new ApiError(400, "something went wrong while uploading avatar");
     }
 
