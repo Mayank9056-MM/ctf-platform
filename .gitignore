@@ -142,6 +142,7 @@ dist
 .svelte-kit
 
 # personal
-futhure-tasks.md
+future-tasks.md
+temp.md
 
 # End of https://www.toptal.com/developers/gitignore/api/node
