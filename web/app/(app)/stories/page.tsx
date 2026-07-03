@@ -1,7 +1,9 @@
-import StoriesPage from '@/modules/story/components/user/list/StoriesPage'
+import React from 'react'
 
 const page = () => {
-  return <StoriesPage />
+  return (
+    <div>page</div>
+  )
 }
 
 export default page

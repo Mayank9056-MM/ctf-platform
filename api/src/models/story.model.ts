@@ -48,7 +48,7 @@ export interface IStoryCharacter {
 export interface IStoryChoice {
   label: string;
   description?: string;
-  targetNode: Types.ObjectId;
+  targetNode?: Types.ObjectId;
 }
 
 export interface IStoryNode extends Document {
@@ -126,6 +126,14 @@ export interface IStoryChapter extends Document {
   entryNodeId?: Types.ObjectId;
 
   nodes: IStoryNode[];
+
+  /**
+   * Persisted canvas layout positions for graph editor.
+   * Stored separately from node content so drag-stop saves don't
+   * touch node subdocuments (avoids triggering Mongoose validators).
+   * Keys are node _id strings. Values are { x, y } pixel coordinates.
+   */
+  layoutPositions: Map<string, { x: number; y: number }>;
 
   /**
    * Validate the chapter's node graph for integrity.
@@ -399,6 +407,17 @@ const storyChapterSchema = new mongoose.Schema<IStoryChapter>(
       type: [storyNodeSchema],
       default: [],
     },
+    layoutPositions: {
+      type: Map,
+      of: new mongoose.Schema(
+        {
+          x: { type: Number, required: true },
+          y: { type: Number, required: true },
+        },
+        { _id: false }
+      ),
+      default: {},
+    },
   },
   {
     timestamps: true,
@@ -622,7 +641,7 @@ storyChapterSchema.methods.validateGraph = function (this: IStoryChapter): {
 
     // each choice target must exist
     for (const choice of node.choices) {
-      if (!nodeIds.has(choice.targetNode.toString())) {
+      if (!nodeIds.has(choice.targetNode?.toString() ?? "")) {
         errors.push(
           `${label}: choice "${choice.label}" targets unknown node ${choice.targetNode}`
         );
@@ -662,7 +681,7 @@ storyChapterSchema.methods.validateGraph = function (this: IStoryChapter): {
     }
 
     for (const c of node.choices) {
-      edges.push(c.targetNode.toString());
+      edges.push(c.targetNode?.toString() ?? "");
     }
 
     adjacency.set(id, edges);

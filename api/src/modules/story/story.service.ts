@@ -10,12 +10,15 @@ import { ApiError } from "../../utils/ApiError";
 import {
   AdvanceNodePayload,
   CommitNodePayload,
+  ConnectEdgePayload,
   CreateChapterPayload,
   CreateNodePayload,
   CreateStoryPayload,
+  DisconnectEdgePayload,
   GraphValidationResult,
   MakeChoicePayload,
   NodeCompleteResult,
+  SavePositionsPayload,
   StartStoryPayload,
   StoryFilters,
   StoryProgressView,
@@ -59,7 +62,7 @@ function collectBranch(
       // Follow the chosen path only if this is the choice node;
       // for other choice nodes downstream, follow all (they'll be traversed later)
       for (const c of node.choices) {
-        const nextId = c.targetNode.toString();
+        const nextId = c.targetNode?.toString() ?? "";
         if (!visited.has(nextId)) queue.push(nextId);
       }
     } else if (node.nextNode) {
@@ -79,12 +82,15 @@ function computeBypassedNodes(
   const chosen = choiceNode.choices.find((c) => c.label === chosenLabel);
   if (!chosen) return [];
 
-  const chosenReachable = collectBranch(nodes, chosen.targetNode.toString());
+  const chosenReachable = collectBranch(
+    nodes,
+    chosen.targetNode?.toString() ?? ""
+  );
 
   const bypassed: string[] = [];
   for (const c of choiceNode.choices) {
     if (c.label === chosenLabel) continue;
-    const unchosen = collectBranch(nodes, c.targetNode.toString());
+    const unchosen = collectBranch(nodes, c.targetNode?.toString() ?? "");
     for (const id of unchosen) {
       if (!chosenReachable.has(id)) {
         bypassed.push(id);
@@ -532,7 +538,7 @@ class StoryService {
         attempts: 1,
         elapsedSeconds: 0,
         choiceLabel,
-        resolvedNextNodeId: chosen.targetNode.toString(),
+        resolvedNextNodeId: chosen.targetNode?.toString() ?? "",
         bypassedNodeIds,
       },
       chapter
@@ -1574,7 +1580,7 @@ class StoryService {
       (n, i) =>
         i !== idx &&
         (n.nextNode?.toString() === nodeId ||
-          n.choices.some((c) => c.targetNode.toString() === nodeId) ||
+          n.choices.some((c) => c.targetNode?.toString() ?? "" === nodeId) ||
           n.unlockAfter.some((id) => id.toString() === nodeId))
     );
 
@@ -1621,6 +1627,260 @@ class StoryService {
    */
   async getStoryAdmin(storyId: string) {
     return this.getStoryDetail(storyId, undefined, true);
+  }
+
+  /**
+   * Wires a node output to another node in the same chapter.
+   *
+   * edgeType "linear"  → sets fromNode.nextNode = toId
+   * edgeType "choice"  → sets fromNode.choices[choiceIndex].targetNode = toId
+   * edgeType "unlock"  → pushes toId into toNode.unlockAfter (AND-gate prereq)
+   *
+   * WHY we update subdoc array elements directly rather than using $set:
+   *   chapter.nodes is a Mongoose DocumentArray. Mutating elements and calling
+   *   chapter.save() is idiomatic Mongoose for subdoc updates — it handles
+   *   dirty-tracking and generates the right $set operators internally.
+   *   Using Model.findByIdAndUpdate with positional operators (nodes.$.nextNode)
+   *   requires knowing the array index up front, which is error-prone.
+   */
+  async connectEdge(payload: ConnectEdgePayload): Promise<void> {
+    const { chapterId, storyId, fromId, toId, edgeType, choiceIndex, label } =
+      payload;
+
+    const chapter = await StoryChapter.findOne({
+      _id: chapterId,
+      story: storyId,
+    });
+    if (!chapter) throw new ApiError(404, "Chapter not found");
+
+    const nodeIds = new Set(chapter.nodes.map((n) => n._id.toString()));
+
+    if (!nodeIds.has(fromId)) {
+      throw new ApiError(
+        400,
+        `Source node ${fromId} does not exist in this chapter`
+      );
+    }
+    if (!nodeIds.has(toId)) {
+      throw new ApiError(
+        400,
+        `Target node ${toId} does not exist in this chapter`
+      );
+    }
+    if (fromId === toId) {
+      throw new ApiError(400, "Cannot connect a node to itself");
+    }
+
+    const fromNode = chapter.nodes.find((n) => n._id.toString() === fromId)!;
+    const toNode = chapter.nodes.find((n) => n._id.toString() === toId)!;
+
+    switch (edgeType) {
+      case "linear": {
+        // Guard: choice nodes use choices[].targetNode, not nextNode
+        if (fromNode.type === "choice") {
+          throw new ApiError(
+            400,
+            "Choice nodes use choices[].targetNode. Use edgeType 'choice' with choiceIndex."
+          );
+        }
+        fromNode.nextNode = new Types.ObjectId(toId);
+        break;
+      }
+
+      case "choice": {
+        if (fromNode.type !== "choice") {
+          throw new ApiError(
+            400,
+            `Node [order=${fromNode.order}] is not a choice node`
+          );
+        }
+        if (choiceIndex === undefined || choiceIndex < 0) {
+          throw new ApiError(400, "choiceIndex is required for choice edges");
+        }
+        if (choiceIndex >= fromNode.choices.length) {
+          throw new ApiError(
+            400,
+            `choiceIndex ${choiceIndex} is out of range. Node has ${fromNode.choices.length} choice(s).`
+          );
+        }
+        fromNode.choices[choiceIndex].targetNode = new Types.ObjectId(toId);
+        // Optionally update the label if provided
+        if (label !== undefined) {
+          fromNode.choices[choiceIndex].label = label;
+        }
+        break;
+      }
+
+      case "unlock": {
+        // AND-gate: toNode unlocks after fromNode is completed
+        // Guard: don't add duplicate
+        const alreadyLinked = toNode.unlockAfter.some(
+          (id) => id.toString() === fromId
+        );
+        if (alreadyLinked) {
+          // Idempotent — not an error, just a no-op
+          return;
+        }
+        toNode.unlockAfter.push(new Types.ObjectId(fromId));
+        break;
+      }
+    }
+
+    await chapter.save({ validateBeforeSave: false });
+  }
+
+  /**
+   * Clears a single edge by its canonical edge ID string.
+   *
+   * Edge ID formats (matches graph.rf-adapter.ts makeEdgeId):
+   *   linear:  "{fromId}-linear-{toId}"   → clear fromNode.nextNode
+   *   choice:  "{fromId}-choice-{index}"  → clear choices[index].targetNode
+   *   unlock:  "{fromId}-unlock-{toId}"   → remove toId from toNode.unlockAfter
+   *
+   * WHY parse the edgeId server-side:
+   *   The frontend canonical edge IDs already encode all the information needed
+   *   to locate and clear the edge. Requiring the client to re-send structured
+   *   { fromId, edgeType, choiceIndex } would duplicate that encoding and create
+   *   a surface for inconsistency. We parse once and trust the format (validated
+   *   by disconnectEdgeSchema regex before this function is called).
+   */
+
+  async disconnectEdge(payload: DisconnectEdgePayload): Promise<void> {
+    const { chapterId, storyId, edgeId } = payload;
+
+    const chapter = await StoryChapter.findOne({
+      _id: chapterId,
+      story: storyId,
+    });
+    if (!chapter) throw new ApiError(404, "Chapter not found");
+
+    // Parse edge ID — regex guaranteed valid by schema
+    // Format examples:
+    //   "64a1b2c3d4e5f6a7b8c9d0e1-linear-64a1b2c3d4e5f6a7b8c9d0e2"
+    //   "64a1b2c3d4e5f6a7b8c9d0e1-choice-2"
+    //   "64a1b2c3d4e5f6a7b8c9d0e1-unlock-64a1b2c3d4e5f6a7b8c9d0e2"
+    const parts = edgeId.split("-");
+
+    // ObjectIds are 24 hex chars. We split on "-" but ObjectIds never contain "-",
+    // so the split is safe. Parts: [fromId(24), type, toIdOrIndex(24 or digits)]
+    if (parts.length < 3) {
+      throw new ApiError(400, `Malformed edgeId: ${edgeId}`);
+    }
+
+    const fromId = parts[0];
+    const edgeType = parts[1] as "linear" | "choice" | "unlock";
+    const thirdPart = parts[2];
+
+    const fromNode = chapter.nodes.find((n) => n._id.toString() === fromId);
+
+    switch (edgeType) {
+      case "linear": {
+        if (!fromNode)
+          throw new ApiError(404, `Source node ${fromId} not found`);
+        if (fromNode.nextNode?.toString() !== thirdPart) {
+          // Already cleared — idempotent
+          return;
+        }
+        fromNode.nextNode = undefined;
+        break;
+      }
+
+      case "choice": {
+        if (!fromNode)
+          throw new ApiError(404, `Source node ${fromId} not found`);
+        const choiceIndex = parseInt(thirdPart, 10);
+        if (
+          isNaN(choiceIndex) ||
+          choiceIndex < 0 ||
+          choiceIndex >= fromNode.choices.length
+        ) {
+          throw new ApiError(
+            400,
+            `Invalid choice index ${thirdPart} for node ${fromId}`
+          );
+        }
+        // Clear targetNode — set to undefined (Mongoose handles null on save)
+        fromNode.choices[choiceIndex].targetNode = undefined;
+        break;
+      }
+
+      case "unlock": {
+        // thirdPart is the toId — remove fromId from toNode.unlockAfter
+        const toId = thirdPart;
+        const toNode = chapter.nodes.find((n) => n._id.toString() === toId);
+        if (!toNode) {
+          // Target node gone — already clean, no error
+          return;
+        }
+        const before = toNode.unlockAfter.length;
+        toNode.unlockAfter = toNode.unlockAfter.filter(
+          (id) => id.toString() !== fromId
+        ) as typeof toNode.unlockAfter;
+        if (toNode.unlockAfter.length === before) {
+          // Edge wasn't there — idempotent
+          return;
+        }
+        break;
+      }
+
+      default:
+        throw new ApiError(400, `Unknown edge type in edgeId: ${edgeType}`);
+    }
+
+    await chapter.save({ validateBeforeSave: false });
+  }
+
+  /**
+   * Persists canvas layout positions for graph editor nodes.
+   *
+   * WHY a dedicated endpoint instead of patching nodes individually:
+   *   - Node drag produces high-frequency position changes. We debounce on the
+   *     client (1.5s), then fire ONE batch save for all moved nodes.
+   *   - Positions are pure layout data (not content), so they should not trigger
+   *     node validators (challengeId required for challenge nodes, etc.).
+   *   - Using $set on a Map field is an O(1) MongoDB operation per key — far
+   *     cheaper than finding and updating individual nodes in the array.
+   *
+   * WHY we validate that position nodeIds exist in the chapter:
+   *   Positions for deleted nodes would accumulate forever. We silently drop
+   *   any nodeId that no longer exists in the chapter — no error, just clean.
+   *
+   * NOTE: We use findOneAndUpdate with $set to avoid loading the full chapter
+   * document (which may have many large node subdocuments) just to update
+   * a small positions map.
+   */
+  async savePositions(payload: SavePositionsPayload): Promise<void> {
+    const { chapterId, storyId, positions } = payload;
+
+    // Verify chapter exists and belongs to story (ownership check)
+    // We select only _id and nodes._id to avoid loading full node content
+    const chapter = await StoryChapter.findOne(
+      { _id: chapterId, story: storyId },
+      { "nodes._id": 1 }
+    ).lean();
+
+    if (!chapter) throw new ApiError(404, "Chapter not found");
+
+    // Build set of valid node IDs — drop positions for nodes that no longer exist
+    const validNodeIds = new Set(chapter.nodes.map((n) => n._id.toString()));
+
+    const $setPayload: Record<string, { x: number; y: number }> = {};
+
+    for (const [nodeId, pos] of Object.entries(positions)) {
+      if (!validNodeIds.has(nodeId)) continue; // silently skip stale positions
+      $setPayload[`layoutPositions.${nodeId}`] = { x: pos.x, y: pos.y };
+    }
+
+    if (Object.keys($setPayload).length === 0) {
+      // Nothing valid to save — not an error
+      return;
+    }
+
+    await StoryChapter.findByIdAndUpdate(
+      chapterId,
+      { $set: $setPayload },
+      { new: false } // we don't need the updated doc
+    );
   }
 }
 

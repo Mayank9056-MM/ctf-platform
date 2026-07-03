@@ -231,3 +231,58 @@ export const storyFiltersSchema = z.object({
     .transform((v) => (v ? parseInt(v, 10) : 20))
     .pipe(z.number().int().min(1).max(100)),
 });
+
+export const connectEdgeSchema = z
+  .object({
+    fromId: mongoId,
+    toId: mongoId,
+    edgeType: z.enum(["linear", "choice", "unlock"], {
+      error: () => ({ message: "edgeType must be linear, choice, or unlock" }),
+    }),
+    /** Required when edgeType === "choice". 0-based index into choices array. */
+    choiceIndex: z.number().int().min(0).optional(),
+    /** Optional: the choice label to set on choices[choiceIndex]. Ignored for non-choice edges. */
+    label: z.string().max(120).trim().optional(),
+  })
+  .refine((d) => d.edgeType !== "choice" || d.choiceIndex !== undefined, {
+    message: "choiceIndex is required when edgeType is 'choice'",
+    path: ["choiceIndex"],
+  })
+  .refine((d) => d.fromId !== d.toId, {
+    message: "fromId and toId must be different nodes",
+    path: ["toId"],
+  });
+
+export type ConnectEdgeInput = z.infer<typeof connectEdgeSchema>;
+
+export const disconnectEdgeSchema = z.object({
+  edgeId: z
+    .string()
+    .min(1)
+    .max(200)
+    .regex(
+      /^[a-f\d]{24}-(linear|choice|unlock)(-[a-f\d]{24}|-\d+)$/i,
+      "Invalid edgeId format. Expected: {nodeId}-{type}-{nodeIdOrIndex}"
+    ),
+});
+
+export type DisconnectEdgeInput = z.infer<typeof disconnectEdgeSchema>;
+
+const positionEntrySchema = z.object({
+  x: z.number(),
+  y: z.number(),
+});
+
+export const savePositionsSchema = z.object({
+  positions: z
+    .record(
+      // Keys must be valid MongoDB ObjectIds (node _ids)
+      z.string().regex(/^[a-f\d]{24}$/i, "Key must be a valid node ObjectId"),
+      positionEntrySchema
+    )
+    .refine((p) => Object.keys(p).length <= 500, {
+      message: "Maximum 500 positions per save",
+    }),
+});
+
+export type SavePositionsInput = z.infer<typeof savePositionsSchema>;

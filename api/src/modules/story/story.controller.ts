@@ -3,10 +3,13 @@ import { asyncHandler } from "../../utils/asyncHandler";
 import {
   addCharacterSchema,
   advanceNodeSchema,
+  connectEdgeSchema,
   createChapterSchema,
   createNodeSchema,
   createStorySchema,
+  disconnectEdgeSchema,
   makeChoiceSchema,
+  savePositionsSchema,
   setStoryStatusSchema,
   storyFiltersSchema,
   updateChapterSchema,
@@ -545,6 +548,55 @@ const adminGetStory = asyncHandler(async (req, res) => {
   return res.status(200).json(new ApiResponse(200, story, "Story retrieved"));
 });
 
+const adminConnectEdge = asyncHandler(async (req, res) => {
+  const { id: storyId, chapterId } = req.params as Record<string, string>;
+
+  if (!storyId || !chapterId) {
+    throw new ApiError(400, "Missing storyId or chapterId");
+  }
+
+  const data = parseBody(connectEdgeSchema, req.body);
+
+  await storyService.connectEdge({ ...data, chapterId, storyId });
+
+  return res.status(200).json(new ApiResponse(200, {}, "Edge connected"));
+});
+
+const adminDisconnectEdge = asyncHandler(async (req, res) => {
+  const { id: storyId, chapterId } = req.params as Record<string, string>;
+
+  if (!storyId || !chapterId) {
+    throw new ApiError(400, "Missing storyId or chapterId");
+  }
+
+  // Body for DELETE — Express doesn't parse body for DELETE by default.
+  // Make sure your Express app has bodyParser/json() applied globally.
+  // Alternatively the client can send edgeId as a query param — see note below.
+  const data = parseBody(disconnectEdgeSchema, req.body);
+
+  await storyService.disconnectEdge({
+    edgeId: data.edgeId,
+    chapterId,
+    storyId,
+  });
+
+  return res.status(200).json(new ApiResponse(200, {}, "Edge disconnected"));
+});
+
+const adminSavePositions = asyncHandler(async (req, res) => {
+  const { id: storyId, chapterId } = req.params as Record<string, string>;
+
+  if (!storyId || !chapterId) {
+    throw new ApiError(400, "Missing storyId or chapterId");
+  }
+
+  const data = parseBody(savePositionsSchema, req.body);
+
+  await storyService.savePositions({ ...data, chapterId, storyId });
+
+  return res.status(200).json(new ApiResponse(200, {}, "Positions saved"));
+});
+
 export {
   getStories,
   getStoryDetail,
@@ -568,4 +620,7 @@ export {
   adminUpdateNode,
   adminDeleteNode,
   adminGetStory,
+  adminConnectEdge,
+  adminDisconnectEdge,
+  adminSavePositions,
 };

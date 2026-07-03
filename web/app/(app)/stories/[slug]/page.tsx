@@ -1,7 +1,9 @@
-import StoryDetailPage from "@/modules/story/components/user/detail/StoryDetailPage";
+import React from 'react'
 
-export default async function Page({ params }: { params: { slug: string } }) {
-  const { slug } = await params;
-
-  return <StoryDetailPage slug={slug} />;
+const page = () => {
+  return (
+    <div>page</div>
+  )
 }
+
+export default page
