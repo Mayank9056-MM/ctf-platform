@@ -6,15 +6,18 @@ import {
 } from "../../middlewares/verifyAuth.middleware";
 import {
   adminAddCharacter,
+  adminConnectEdge,
   adminCreateChapter,
   adminCreateNode,
   adminCreateStory,
   adminDeleteChapter,
   adminDeleteNode,
   adminDeleteStory,
+  adminDisconnectEdge,
   adminGetStory,
   adminPublishChapter,
   adminRemoveCharacter,
+  adminSavePositions,
   adminSetStoryStatus,
   adminUpdateChapter,
   adminUpdateNode,
@@ -141,6 +144,44 @@ storyRouter.post(
   "/:id/chapters/:chapterId/nodes/:nodeId/choose",
   verifyAuth,
   makeChoice
+);
+
+/**
+ * POST /stories/admin/:id/chapters/:chapterId/edges
+ *   Wire a node output to another node.
+ *   Body: { fromId, toId, edgeType, choiceIndex?, label? }
+ *
+ * DELETE /stories/admin/:id/chapters/:chapterId/edges
+ *   Clear an edge by its canonical ID.
+ *   Body: { edgeId }
+ *
+ * PUT /stories/admin/:id/chapters/:chapterId/positions
+ *   Persist canvas layout positions (debounced drag-stop).
+ *   Body: { positions: Record<nodeId, {x, y}> }
+ */
+storyRouter.post(
+  "/admin/:id/chapters/:chapterId/edges",
+  adminGuard,
+  adminConnectEdge
+);
+
+storyRouter.delete(
+  "/admin/:id/chapters/:chapterId/edges",
+  adminGuard,
+  adminDisconnectEdge
+);
+
+// Alternative if your client/proxy doesn't support DELETE with body:
+// storyRouter.post(
+//   "/admin/:id/chapters/:chapterId/edges/disconnect",
+//   adminGuard,
+//   adminDisconnectEdge,
+// );
+
+storyRouter.put(
+  "/admin/:id/chapters/:chapterId/positions",
+  adminGuard,
+  adminSavePositions
 );
 
 export default storyRouter;

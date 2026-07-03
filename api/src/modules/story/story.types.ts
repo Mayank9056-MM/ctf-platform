@@ -4,6 +4,7 @@ import {
   StoryNodeType,
   StoryStatus,
 } from "../../models/story.model";
+import { ConnectEdgeInput, SavePositionsInput } from "./story.validator";
 
 // Story CRUD
 
@@ -25,6 +26,22 @@ export type UpdateStoryPayload = Partial<
 > & {
   storyId: string;
   requesterId: Types.ObjectId;
+};
+
+export type ConnectEdgePayload = ConnectEdgeInput & {
+  chapterId: string;
+  storyId: string;
+};
+
+export type DisconnectEdgePayload = {
+  edgeId: string;
+  chapterId: string;
+  storyId: string;
+};
+
+export type SavePositionsPayload = SavePositionsInput & {
+  chapterId: string;
+  storyId: string;
 };
 
 // Chapter CRUD
