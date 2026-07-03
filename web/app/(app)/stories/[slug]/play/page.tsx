@@ -1,7 +1,9 @@
-import StoryPlayPage from "@/modules/story/components/user/player/StoryPlayPage";
+import React from 'react'
 
-export default async function Page({ params }: { params: { slug: string } }) {
-  const { slug } = await params;
-
-  return <StoryPlayPage slug={slug} />;
+const page = () => {
+  return (
+    <div>page</div>
+  )
 }
+
+export default page
