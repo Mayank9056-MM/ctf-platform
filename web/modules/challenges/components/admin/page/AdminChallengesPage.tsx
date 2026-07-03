@@ -24,21 +24,32 @@ import { fmt } from "@/shared/utils/fmt";
 import { timeAgo } from "@/shared/utils/time";
 import { RowActions } from "@/modules/challenges/components/admin/RowActions";
 import { AnimatePresence } from "motion/react";
-import { ChallengeDetailPanel } from "@/modules/challenges/components/admin/ChallengeDetailPanel";
+import { ChallengeDetailPanel } from "@/modules/challenges/components/admin/detail/ChallengeDetailPanel";
 import { motion } from "motion/react";
+import { DEFAULT_FILTERS, FilterBar, LocalFilters } from "../filters/FilterBar";
+import { StatsStrip } from "../StatsStrip";
+import { ScoringBadge } from "../badges/ScoringBadge";
+import { CatBadge } from "../badges/CatBadge";
+import { DiffBadge } from "../badges/DiffBadge";
+import { VisibleBadge } from "../badges/VisibleBadge";
+import { ChallengeFormPanel } from "../../admin/form/ChallengeFormPanel";
 import {
-  DEFAULT_FILTERS,
-  FilterBar,
-  LocalFilters,
-} from "./FilterBar";
-import { StatsStrip } from "./StatsStrip";
-import { ScoringBadge } from "./badges/ScoringBadge";
-import { CatBadge } from "./badges/CatBadge";
-import { DiffBadge } from "./badges/DiffBadge";
-import { VisibleBadge } from "./badges/VisibleBadge";
-import { ChallengeFormPanel } from "./ChallengeFormPanel";
-import { ADMIN_CHALLENGE_CAT_ICONS, ADMIN_CHALLENGE_DIFF_CONFIG } from "../../config/admin-challenge-ui.config";
+  ADMIN_CHALLENGE_CAT_ICONS,
+  ADMIN_CHALLENGE_DIFF_CONFIG,
+} from "../../../config/admin-challenge-ui.config";
 import { ConfirmModal } from "@/shared/components/ConfirmModal";
+import { Button } from "@/components/ui/button";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+
+// TableRow rendered through motion for the same per-row fade-in used previously with motion.tr
+const MotionTableRow = motion(TableRow);
 
 export default function AdminChallengesPage() {
   const user = useAuthStore((s) => s.user);
@@ -113,23 +124,24 @@ export default function AdminChallengesPage() {
           )}
         </div>
         <div className="flex items-center gap-2">
-          <button
+          <Button
+            variant="outline"
             onClick={() => refetch()}
             disabled={isFetching}
-            className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/60 px-3.5 py-2 text-xs font-mono text-slate-400 hover:border-slate-500 hover:text-white transition-all disabled:opacity-50"
+            className="h-auto flex items-center gap-2 rounded-lg border-slate-700 bg-slate-900/60 px-3.5 py-2 text-xs font-mono text-slate-400 hover:border-slate-500 hover:text-white hover:bg-slate-900/60 transition-all disabled:opacity-50"
           >
             <RefreshCw
               className={cn("h-3.5 w-3.5", isFetching && "animate-spin")}
             />
             Refresh
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={() => setFormMode({ open: true, mode: "create" })}
-            className="flex items-center gap-2 rounded-lg bg-emerald-500 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-emerald-400 transition-colors"
+            className="h-auto flex items-center gap-2 rounded-lg bg-emerald-500 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-emerald-400 transition-colors"
           >
             <Plus className="h-3.5 w-3.5" />
             New challenge
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -151,63 +163,66 @@ export default function AdminChallengesPage() {
             {/* Table */}
             <div className="rounded-xl border border-slate-800 overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-800 bg-slate-900/60">
-                      <th className="px-4 py-3 text-left font-mono text-[11px] tracking-wider text-slate-600 uppercase">
+                <Table className="w-full text-sm">
+                  <TableHeader>
+                    <TableRow className="border-b border-slate-800 bg-slate-900/60 hover:bg-slate-900/60">
+                      <TableHead className="px-4 py-3 text-left font-mono text-[11px] tracking-wider text-slate-600 uppercase h-auto">
                         Challenge
-                      </th>
-                      <th className="px-4 py-3 text-left font-mono text-[11px] tracking-wider text-slate-600 uppercase">
+                      </TableHead>
+                      <TableHead className="px-4 py-3 text-left font-mono text-[11px] tracking-wider text-slate-600 uppercase h-auto">
                         Category
-                      </th>
-                      <th className="px-4 py-3 text-left font-mono text-[11px] tracking-wider text-slate-600 uppercase">
+                      </TableHead>
+                      <TableHead className="px-4 py-3 text-left font-mono text-[11px] tracking-wider text-slate-600 uppercase h-auto">
                         Difficulty
-                      </th>
-                      <th className="px-4 py-3 text-left font-mono text-[11px] tracking-wider text-slate-600 uppercase">
+                      </TableHead>
+                      <TableHead className="px-4 py-3 text-left font-mono text-[11px] tracking-wider text-slate-600 uppercase h-auto">
                         Points
-                      </th>
-                      <th className="px-4 py-3 text-left font-mono text-[11px] tracking-wider text-slate-600 uppercase">
+                      </TableHead>
+                      <TableHead className="px-4 py-3 text-left font-mono text-[11px] tracking-wider text-slate-600 uppercase h-auto">
                         Solves
-                      </th>
-                      <th className="px-4 py-3 text-left font-mono text-[11px] tracking-wider text-slate-600 uppercase">
+                      </TableHead>
+                      <TableHead className="px-4 py-3 text-left font-mono text-[11px] tracking-wider text-slate-600 uppercase h-auto">
                         Status
-                      </th>
-                      <th className="px-4 py-3 text-left font-mono text-[11px] tracking-wider text-slate-600 uppercase">
+                      </TableHead>
+                      <TableHead className="px-4 py-3 text-left font-mono text-[11px] tracking-wider text-slate-600 uppercase h-auto">
                         Published
-                      </th>
-                      <th className="px-4 py-3 text-right font-mono text-[11px] tracking-wider text-slate-600 uppercase">
+                      </TableHead>
+                      <TableHead className="px-4 py-3 text-right font-mono text-[11px] tracking-wider text-slate-600 uppercase h-auto">
                         Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {isLoading &&
                       Array.from({ length: 8 }).map((_, i) => (
-                        <tr key={i} className="border-b border-slate-800/50">
+                        <TableRow
+                          key={i}
+                          className="border-b border-slate-800/50 hover:bg-transparent"
+                        >
                           {Array.from({ length: 8 }).map((_, j) => (
-                            <td key={j} className="px-4 py-3">
+                            <TableCell key={j} className="px-4 py-3">
                               <Skeleton
                                 className="h-4"
                                 style={{
                                   width: [140, 80, 70, 50, 40, 70, 70, 40][j],
                                 }}
                               />
-                            </td>
+                            </TableCell>
                           ))}
-                        </tr>
+                        </TableRow>
                       ))}
 
                     {!isLoading && visible.length === 0 && (
-                      <tr>
-                        <td colSpan={8} className="py-16 text-center">
+                      <TableRow className="hover:bg-transparent">
+                        <TableCell colSpan={8} className="py-16 text-center">
                           <div className="flex flex-col items-center gap-2">
                             <Flag className="h-8 w-8 text-slate-700" />
                             <p className="text-sm text-slate-500 font-mono">
                               No challenges found
                             </p>
                           </div>
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     )}
 
                     {visible.map((challenge) => {
@@ -219,7 +234,7 @@ export default function AdminChallengesPage() {
                         selectedChallenge?._id === challenge._id;
 
                       return (
-                        <motion.tr
+                        <MotionTableRow
                           key={challenge._id}
                           initial={{ opacity: 0 }}
                           animate={{ opacity: 1 }}
@@ -229,12 +244,12 @@ export default function AdminChallengesPage() {
                           className={cn(
                             "border-b border-slate-800/50 cursor-pointer transition-colors group",
                             isSelected
-                              ? "bg-emerald-500/5"
+                              ? "bg-emerald-500/5 hover:bg-emerald-500/5"
                               : "hover:bg-slate-800/30",
                           )}
                         >
                           {/* Title */}
-                          <td className="px-4 py-3">
+                          <TableCell className="px-4 py-3">
                             <div className="flex items-center gap-2">
                               <div
                                 className={cn(
@@ -256,20 +271,20 @@ export default function AdminChallengesPage() {
                                 </div>
                               </div>
                             </div>
-                          </td>
+                          </TableCell>
 
                           {/* Category */}
-                          <td className="px-4 py-3">
+                          <TableCell className="px-4 py-3">
                             <CatBadge category={challenge.category} />
-                          </td>
+                          </TableCell>
 
                           {/* Difficulty */}
-                          <td className="px-4 py-3">
+                          <TableCell className="px-4 py-3">
                             <DiffBadge difficulty={challenge.difficulty} />
-                          </td>
+                          </TableCell>
 
                           {/* Points */}
-                          <td className="px-4 py-3">
+                          <TableCell className="px-4 py-3">
                             <div>
                               <span className="font-mono text-sm font-bold text-emerald-400 tabular-nums">
                                 {fmt(challenge.currentPoints)}
@@ -282,10 +297,10 @@ export default function AdminChallengesPage() {
                                   </span>
                                 )}
                             </div>
-                          </td>
+                          </TableCell>
 
                           {/* Solves */}
-                          <td className="px-4 py-3">
+                          <TableCell className="px-4 py-3">
                             <div>
                               <span className="font-mono text-sm text-slate-300 tabular-nums">
                                 {fmt(challenge.solveCount)}
@@ -302,24 +317,24 @@ export default function AdminChallengesPage() {
                                 </span>
                               )}
                             </div>
-                          </td>
+                          </TableCell>
 
                           {/* Status */}
-                          <td className="px-4 py-3">
+                          <TableCell className="px-4 py-3">
                             <VisibleBadge visible={challenge.isVisible} />
-                          </td>
+                          </TableCell>
 
                           {/* Published */}
-                          <td className="px-4 py-3">
+                          <TableCell className="px-4 py-3">
                             <span className="font-mono text-xs text-slate-500">
                               {challenge.publishedAt
                                 ? timeAgo(challenge.publishedAt)
                                 : "—"}
                             </span>
-                          </td>
+                          </TableCell>
 
                           {/* Actions */}
-                          <td
+                          <TableCell
                             className="px-4 py-3 text-right"
                             onClick={(e) => e.stopPropagation()}
                           >
@@ -331,12 +346,12 @@ export default function AdminChallengesPage() {
                               onUnpublish={() => setUnpublishTarget(challenge)}
                               onDelete={() => setDeleteTarget(challenge)}
                             />
-                          </td>
-                        </motion.tr>
+                          </TableCell>
+                        </MotionTableRow>
                       );
                     })}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
             </div>
 
@@ -349,32 +364,34 @@ export default function AdminChallengesPage() {
                   {meta.total.toLocaleString()}
                 </p>
                 <div className="flex items-center gap-2">
-                  <button
+                  <Button
+                    variant="outline"
                     onClick={() =>
                       setFilters((p) => ({ ...p, page: p.page - 1 }))
                     }
                     disabled={!meta.hasPrev}
-                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700 text-slate-400 hover:border-slate-500 hover:text-white transition-colors disabled:opacity-40 disabled:pointer-events-none"
+                    className="h-8 w-8 p-0 flex items-center justify-center rounded-lg border-slate-700 bg-transparent text-slate-400 hover:border-slate-500 hover:text-white hover:bg-transparent transition-colors disabled:opacity-40 disabled:pointer-events-none"
                   >
                     <ChevronLeft className="h-4 w-4" />
-                  </button>
+                  </Button>
                   {Array.from(
                     { length: Math.min(meta.totalPages, 7) },
                     (_, i) => {
                       const page = i + 1;
                       return (
-                        <button
+                        <Button
                           key={page}
+                          variant={meta.page === page ? "default" : "outline"}
                           onClick={() => setFilters((p) => ({ ...p, page }))}
                           className={cn(
-                            "h-8 min-w-[32px] rounded-lg px-2 font-mono text-xs transition-all",
+                            "h-8 min-w-[32px] w-auto p-0 px-2 rounded-lg font-mono text-xs transition-all",
                             meta.page === page
-                              ? "bg-emerald-500 text-slate-950 font-bold"
-                              : "border border-slate-700 text-slate-400 hover:border-slate-500 hover:text-white",
+                              ? "bg-emerald-500 text-slate-950 font-bold hover:bg-emerald-500"
+                              : "border-slate-700 bg-transparent text-slate-400 hover:border-slate-500 hover:text-white hover:bg-transparent",
                           )}
                         >
                           {page}
-                        </button>
+                        </Button>
                       );
                     },
                   )}
@@ -383,15 +400,16 @@ export default function AdminChallengesPage() {
                       ...
                     </span>
                   )}
-                  <button
+                  <Button
+                    variant="outline"
                     onClick={() =>
                       setFilters((p) => ({ ...p, page: p.page + 1 }))
                     }
                     disabled={!meta.hasNext}
-                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-700 text-slate-400 hover:border-slate-500 hover:text-white transition-colors disabled:opacity-40 disabled:pointer-events-none"
+                    className="h-8 w-8 p-0 flex items-center justify-center rounded-lg border-slate-700 bg-transparent text-slate-400 hover:border-slate-500 hover:text-white hover:bg-transparent transition-colors disabled:opacity-40 disabled:pointer-events-none"
                   >
                     <ChevronRight className="h-4 w-4" />
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}

@@ -10,7 +10,16 @@ import {
   ChallengeDifficulty,
   ChallengeFilters,
 } from "@/modules/challenges/types/challenge.types";
-import { PAGE_SIZES } from "../../../admin/constants/admin.constants";
+import { PAGE_SIZES } from "@/modules/admin/constants/admin.constants";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export type LocalFilters = {
   search: string;
@@ -60,17 +69,18 @@ export function FilterBar({
     active: boolean;
     onClick: () => void;
   }) => (
-    <button
+    <Button
+      variant="outline"
       onClick={onClick}
       className={cn(
-        "rounded-full px-3 py-1 font-mono text-[11px] transition-all border",
+        "h-auto rounded-full px-3 py-1 font-mono text-[11px] transition-all border",
         active
-          ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
-          : "border-slate-700 text-slate-500 hover:border-slate-500 hover:text-slate-300",
+          ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-400"
+          : "border-slate-700 bg-transparent text-slate-500 hover:border-slate-500 hover:text-slate-300 hover:bg-transparent",
       )}
     >
       {label}
-    </button>
+    </Button>
   );
 
   const SortHeader = ({
@@ -114,12 +124,12 @@ export function FilterBar({
         {/* Search */}
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500 pointer-events-none" />
-          <input
+          <Input
             type="text"
             value={filters.search}
             onChange={(e) => set({ search: e.target.value })}
             placeholder="Search challenges..."
-            className="w-full rounded-lg border border-slate-700 bg-slate-900/60 py-2 pl-8 pr-4 text-sm text-white placeholder:text-slate-600 outline-none focus:border-emerald-500/50 focus:ring-2 focus:ring-emerald-500/20 transition-all"
+            className="w-full rounded-lg border-slate-700 bg-slate-900/60 py-2 pl-8 pr-4 text-sm text-white placeholder:text-slate-600 outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/20 focus:border-emerald-500/50 transition-all h-auto"
           />
           {filters.search && (
             <button
@@ -132,87 +142,110 @@ export function FilterBar({
         </div>
 
         {/* Category */}
-        <select
-          value={filters.category}
-          onChange={(e) =>
-            set({ category: e.target.value as ChallengeCategory | "" })
-          }
-          className="rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-sm text-slate-300 outline-none focus:border-slate-500 font-mono"
-        >
-          <option value="">All categories</option>
-          {CHALLENGE_CATEGORIES.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-
-        {/* Difficulty */}
-        <select
-          value={filters.difficulty}
-          onChange={(e) =>
+        <Select
+          value={filters.category === "" ? "__all__" : filters.category}
+          onValueChange={(val) =>
             set({
-              difficulty: e.target.value as ChallengeDifficulty | "",
+              category: (val === "__all__" ? "" : val) as
+                | ChallengeCategory
+                | "",
             })
           }
-          className="rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-sm text-slate-300 outline-none focus:border-slate-500 font-mono"
         >
-          <option value="">All difficulties</option>
-          {CHALLENGE_DIFFICULTIES.map((d) => (
-            <option key={d} value={d}>
-              {d}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger className="h-auto rounded-lg border-slate-700 bg-slate-900/60 px-3 py-2 text-sm text-slate-300 outline-none focus:border-slate-500 font-mono">
+            <SelectValue placeholder="All categories" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">All categories</SelectItem>
+            {CHALLENGE_CATEGORIES.map((c) => (
+              <SelectItem key={c} value={c}>
+                {c}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {/* Difficulty */}
+        <Select
+          value={filters.difficulty === "" ? "__all__" : filters.difficulty}
+          onValueChange={(val) =>
+            set({
+              difficulty: (val === "__all__" ? "" : val) as
+                | ChallengeDifficulty
+                | "",
+            })
+          }
+        >
+          <SelectTrigger className="h-auto rounded-lg border-slate-700 bg-slate-900/60 px-3 py-2 text-sm text-slate-300 outline-none focus:border-slate-500 font-mono">
+            <SelectValue placeholder="All difficulties" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">All difficulties</SelectItem>
+            {CHALLENGE_DIFFICULTIES.map((d) => (
+              <SelectItem key={d} value={d}>
+                {d}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
         {/* Sort */}
-        <select
+        <Select
           value={`${filters.sortBy}-${filters.sortOrder}`}
-          onChange={(e) => {
-            const [sortBy, sortOrder] = e.target.value.split("-");
+          onValueChange={(val) => {
+            const [sortBy, sortOrder] = val.split("-");
             setFilters((p) => ({
               ...p,
               sortBy: sortBy as ChallengeFilters["sortBy"],
               sortOrder: sortOrder as "asc" | "desc",
             }));
           }}
-          className="rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-sm text-slate-300 outline-none focus:border-slate-500 font-mono"
         >
-          <option value="publishedAt-desc">Newest</option>
-          <option value="publishedAt-asc">Oldest</option>
-          <option value="points-desc">Points ↓</option>
-          <option value="points-asc">Points ↑</option>
-          <option value="solveCount-desc">Most solved</option>
-          <option value="solveCount-asc">Least solved</option>
-        </select>
+          <SelectTrigger className="h-auto rounded-lg border-slate-700 bg-slate-900/60 px-3 py-2 text-sm text-slate-300 outline-none focus:border-slate-500 font-mono">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="publishedAt-desc">Newest</SelectItem>
+            <SelectItem value="publishedAt-asc">Oldest</SelectItem>
+            <SelectItem value="points-desc">Points ↓</SelectItem>
+            <SelectItem value="points-asc">Points ↑</SelectItem>
+            <SelectItem value="solveCount-desc">Most solved</SelectItem>
+            <SelectItem value="solveCount-asc">Least solved</SelectItem>
+          </SelectContent>
+        </Select>
 
         {/* Page size */}
-        <select
-          value={filters.limit}
-          onChange={(e) =>
+        <Select
+          value={String(filters.limit)}
+          onValueChange={(val) =>
             setFilters((p) => ({
               ...p,
-              limit: Number(e.target.value),
+              limit: Number(val),
               page: 1,
             }))
           }
-          className="rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-sm text-slate-300 outline-none focus:border-slate-500 font-mono"
         >
-          {PAGE_SIZES.map((s) => (
-            <option key={s} value={s}>
-              {s} / page
-            </option>
-          ))}
-        </select>
+          <SelectTrigger className="h-auto rounded-lg border-slate-700 bg-slate-900/60 px-3 py-2 text-sm text-slate-300 outline-none focus:border-slate-500 font-mono">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {PAGE_SIZES.map((s) => (
+              <SelectItem key={s} value={String(s)}>
+                {s} / page
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
         {/* More filters */}
-        <button
+        <Button
+          variant="outline"
           onClick={() => setShowMore((v) => !v)}
           className={cn(
-            "flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-mono transition-all",
+            "h-auto flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-mono transition-all",
             showMore
-              ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
-              : "border-slate-700 text-slate-500 hover:border-slate-500 hover:text-slate-300",
+              ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-400"
+              : "border-slate-700 bg-transparent text-slate-500 hover:border-slate-500 hover:text-slate-300 hover:bg-transparent",
           )}
         >
           <Filter className="h-3.5 w-3.5" />
@@ -220,16 +253,17 @@ export function FilterBar({
           {hasActive && (
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
           )}
-        </button>
+        </Button>
 
         {hasActive && (
-          <button
+          <Button
+            variant="ghost"
             onClick={() => setFilters(DEFAULT_FILTERS)}
-            className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-red-400 transition-colors font-mono"
+            className="h-auto p-0 flex items-center gap-1.5 text-xs text-slate-500 hover:text-red-400 hover:bg-transparent transition-colors font-mono"
           >
             <XCircle className="h-3.5 w-3.5" />
             Clear
-          </button>
+          </Button>
         )}
       </div>
 

@@ -10,6 +10,9 @@ import {
   AddHintFormData,
   addHintSchema,
 } from "@/modules/challenges/schemas/challenge.schemas";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 
 /**
  * A component to manage hints for a challenge.
@@ -48,13 +51,14 @@ export function HintManager({ challenge }: { challenge: AdminChallenge }) {
         <p className="font-mono text-[11px] tracking-[0.2em] text-slate-600 uppercase">
           Hints ({challenge.hints.length})
         </p>
-        <button
+        <Button
+          variant="outline"
           onClick={() => setShowForm((v) => !v)}
-          className="flex items-center gap-1 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 font-mono text-[10px] text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+          className="h-auto flex items-center gap-1 rounded-md border-emerald-500/30 bg-emerald-500/10 px-2 py-1 font-mono text-[10px] text-emerald-400 hover:bg-emerald-500/20 transition-colors"
         >
           <Plus className="h-2.5 w-2.5" />
           Add
-        </button>
+        </Button>
       </div>
 
       {/* Existing hints */}
@@ -75,13 +79,14 @@ export function HintManager({ challenge }: { challenge: AdminChallenge }) {
                 {hint.cost} pts
               </p>
             </div>
-            <button
+            <Button
+              variant="ghost"
               onClick={() => removeHint(i)}
               disabled={isRemoving}
-              className="text-slate-600 hover:text-red-400 transition-colors"
+              className="h-auto w-auto p-0 text-slate-600 hover:text-red-400 hover:bg-transparent transition-colors"
             >
               <Trash2 className="h-3.5 w-3.5" />
-            </button>
+            </Button>
           </div>
         ))}
         {challenge.hints.length === 0 && !showForm && (
@@ -101,49 +106,50 @@ export function HintManager({ challenge }: { challenge: AdminChallenge }) {
             onSubmit={handleSubmit(onAdd)}
             className="space-y-2 overflow-hidden border border-slate-800 rounded-lg p-3 bg-slate-900/40"
           >
-            <textarea
+            <Textarea
               {...register("text")}
               rows={2}
               placeholder="Hint text..."
-              className="w-full rounded-md border border-slate-700 bg-slate-900/60 px-2 py-1.5 text-xs text-white placeholder:text-slate-600 outline-none resize-none focus:border-emerald-500/50"
+              className="w-full rounded-md border-slate-700 bg-slate-900/60 px-2 py-1.5 text-xs text-white placeholder:text-slate-600 outline-none resize-none focus-visible:ring-0 focus:border-emerald-500/50"
             />
             {errors.text && (
               <p className="text-[10px] text-red-400">{errors.text.message}</p>
             )}
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <input
+                <Input
                   {...register("cost")}
                   type="number"
                   placeholder="Cost (pts)"
-                  className="w-full rounded-md border border-slate-700 bg-slate-900/60 px-2 py-1.5 text-xs text-white placeholder:text-slate-600 outline-none focus:border-emerald-500/50"
+                  className="w-full rounded-md border-slate-700 bg-slate-900/60 px-2 py-1.5 text-xs text-white placeholder:text-slate-600 outline-none focus-visible:ring-0 focus:border-emerald-500/50 h-auto"
                 />
               </div>
               <div>
-                <input
+                <Input
                   {...register("order")}
                   type="number"
                   placeholder="Order (1, 2, 3...)"
-                  className="w-full rounded-md border border-slate-700 bg-slate-900/60 px-2 py-1.5 text-xs text-white placeholder:text-slate-600 outline-none focus:border-emerald-500/50"
+                  className="w-full rounded-md border-slate-700 bg-slate-900/60 px-2 py-1.5 text-xs text-white placeholder:text-slate-600 outline-none focus-visible:ring-0 focus:border-emerald-500/50 h-auto"
                 />
               </div>
             </div>
             <div className="flex gap-2">
-              <button
+              <Button
                 type="button"
+                variant="outline"
                 onClick={() => setShowForm(false)}
-                className="flex-1 rounded-md border border-slate-700 py-1.5 text-xs text-slate-400 hover:text-slate-200 transition-colors"
+                className="h-auto flex-1 rounded-md border-slate-700 bg-transparent py-1.5 text-xs text-slate-400 hover:text-slate-200 hover:bg-transparent transition-colors"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 type="submit"
                 disabled={isAdding}
-                className="flex-1 flex items-center justify-center gap-1 rounded-md bg-emerald-500 py-1.5 text-xs font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
+                className="h-auto flex-1 flex items-center justify-center gap-1 rounded-md bg-emerald-500 py-1.5 text-xs font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-60"
               >
                 {isAdding && <Loader2 className="h-3 w-3 animate-spin" />}
                 Add hint
-              </button>
+              </Button>
             </div>
           </motion.form>
         )}
