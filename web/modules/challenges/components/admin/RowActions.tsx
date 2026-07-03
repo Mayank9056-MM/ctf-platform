@@ -4,6 +4,7 @@ import { Eye, EyeOff, FileText, MoreHorizontal, Trash2 } from "lucide-react";
 import { AnimatePresence } from "motion/react";
 import { cn } from "@/lib/utils";
 import { motion } from "motion/react";
+import { Button } from "@/components/ui/button";
 
 export function RowActions({
   challenge,
@@ -24,15 +25,16 @@ export function RowActions({
 
   return (
     <div className="relative">
-      <button
+      <Button
+        variant="outline"
         onClick={(e) => {
           e.stopPropagation();
           setOpen((v) => !v);
         }}
-        className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-700 text-slate-500 hover:border-slate-500 hover:text-slate-300 transition-colors"
+        className="h-7 w-7 p-0 flex items-center justify-center rounded-md border-slate-700 bg-transparent text-slate-500 hover:border-slate-500 hover:text-slate-300 hover:bg-transparent transition-colors"
       >
         <MoreHorizontal className="h-3.5 w-3.5" />
-      </button>
+      </Button>
 
       <AnimatePresence>
         {open && (
@@ -74,15 +76,16 @@ export function RowActions({
                     ]
                   : []),
               ].map((action) => (
-                <button
+                <Button
                   key={action.label}
+                  variant="ghost"
                   onClick={(e) => {
                     e.stopPropagation();
                     action.onClick();
                     setOpen(false);
                   }}
                   className={cn(
-                    "flex w-full items-center gap-2.5 px-3 py-2 text-sm transition-colors hover:bg-slate-800/60",
+                    "h-auto w-full justify-start rounded-none flex items-center gap-2.5 px-3 py-2 text-sm font-normal transition-colors hover:bg-slate-800/60",
                     action.color || "text-slate-300",
                   )}
                 >
@@ -93,7 +96,7 @@ export function RowActions({
                     )}
                   />
                   {action.label}
-                </button>
+                </Button>
               ))}
             </motion.div>
           </>

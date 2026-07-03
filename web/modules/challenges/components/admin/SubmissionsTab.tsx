@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import { Skeleton } from "@/shared/components/Skeleton";
 import { timeAgo } from "@/shared/utils/time";
 import { useAdminChallengeSubmissions } from "@/modules/challenges/hooks/admin/useAdminChallengeSubmissions";
+import { Button } from "@/components/ui/button";
 
 /**
  * Submissions tab for admin challenge page.
@@ -33,21 +34,22 @@ export function SubmissionsTab({ challengeId }: { challengeId: string }) {
             [false, "Wrong"],
           ] as const
         ).map(([val, lbl]) => (
-          <button
+          <Button
             key={String(val)}
+            variant="outline"
             onClick={() => {
               setCorrectOnly(val);
               setPage(1);
             }}
             className={cn(
-              "rounded-full px-2.5 py-1 font-mono text-[10px] border transition-all",
+              "h-auto rounded-full px-2.5 py-1 font-mono text-[10px] border transition-all",
               correctOnly === val
-                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
-                : "border-slate-700 text-slate-500 hover:text-slate-300",
+                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-400"
+                : "border-slate-700 bg-transparent text-slate-500 hover:text-slate-300 hover:bg-transparent",
             )}
           >
             {lbl}
-          </button>
+          </Button>
         ))}
       </div>
 
@@ -91,23 +93,25 @@ export function SubmissionsTab({ challengeId }: { challengeId: string }) {
 
       {data && data.meta.totalPages > 1 && (
         <div className="flex items-center justify-center gap-2 pt-1">
-          <button
+          <Button
+            variant="outline"
             onClick={() => setPage((p) => p - 1)}
             disabled={!data.meta.hasPrev}
-            className="rounded-md border border-slate-700 p-1 text-slate-500 hover:text-slate-300 disabled:opacity-40"
+            className="h-auto rounded-md border-slate-700 bg-transparent p-1 text-slate-500 hover:text-slate-300 hover:bg-transparent disabled:opacity-40"
           >
             <ChevronLeft className="h-3 w-3" />
-          </button>
+          </Button>
           <span className="font-mono text-[10px] text-slate-600">
             {data.meta.page} / {data.meta.totalPages}
           </span>
-          <button
+          <Button
+            variant="outline"
             onClick={() => setPage((p) => p + 1)}
             disabled={!data.meta.hasNext}
-            className="rounded-md border border-slate-700 p-1 text-slate-500 hover:text-slate-300 disabled:opacity-40"
+            className="h-auto rounded-md border-slate-700 bg-transparent p-1 text-slate-500 hover:text-slate-300 hover:bg-transparent disabled:opacity-40"
           >
             <ChevronRight className="h-3 w-3" />
-          </button>
+          </Button>
         </div>
       )}
     </div>
